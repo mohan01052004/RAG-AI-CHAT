@@ -16,6 +16,24 @@ from app.models import Base
 try:
     Base.metadata.create_all(bind=engine)
     print("Database tables initialized successfully.")
+    
+    # Synchronize primary key sequences (PostgreSQL only)
+    if "postgresql" in engine.dialect.name:
+        from sqlalchemy import text
+        with engine.connect() as conn:
+            for table in ["documents", "queries", "document_topics", "practice_attempts", "document_chunks"]:
+                try:
+                    conn.execute(text(f"""
+                        SELECT setval(
+                            pg_get_serial_sequence('{table}', 'id'),
+                            COALESCE((SELECT MAX(id) FROM {table}), 1),
+                            (SELECT MAX(id) FROM {table}) IS NOT NULL
+                        );
+                    """))
+                    conn.commit()
+                except Exception as seq_err:
+                    print(f"Warning: Could not sync sequence for table {table}: {seq_err}")
+        print("Database sequences synchronized successfully.")
 except Exception as e:
     print(f"WARNING: Database table initialization failed (server will still start): {e}")
 
