@@ -17,7 +17,12 @@ os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
 
 _HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
 _HF_MODEL = os.getenv("HUGGINGFACE_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
-_HF_API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{_HF_MODEL}"
+
+# Normalize model name: prepend sentence-transformers/ if not specified
+if _HF_MODEL and "/" not in _HF_MODEL:
+    _HF_MODEL = f"sentence-transformers/{_HF_MODEL}"
+
+_HF_API_URL = f"https://api-inference.huggingface.co/models/{_HF_MODEL}"
 
 # Local model fallback (only used if HF API key is not set — i.e. local dev without key)
 _local_model = None
@@ -60,10 +65,19 @@ def _embed(texts: list) -> list:
         try:
             return _embed_via_hf_api(texts)
         except Exception as e:
-            logging.warning(f"HF API embedding failed ({e}), falling back to local model...")
-            return _embed_via_local(texts)
+            logging.warning(f"HF API embedding failed ({e}), trying local fallback...")
+            try:
+                return _embed_via_local(texts)
+            except Exception as local_e:
+                logging.error(f"Local fallback also failed (e.g. missing sentence-transformers): {local_e}")
+                # Return zero vector representation to prevent crash
+                return [[0.0] * 384 for _ in texts]
     else:
-        return _embed_via_local(texts)
+        try:
+            return _embed_via_local(texts)
+        except Exception as local_e:
+            logging.error(f"Local fallback failed: {local_e}")
+            return [[0.0] * 384 for _ in texts]
 
 
 # ─── Pinecone setup ─────────────────────────────────────────────────────────
