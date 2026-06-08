@@ -1,4 +1,9 @@
 {
+  "build": {
+    "env": {
+      "REACT_APP_API_URL": "https://rag-ai-chat-st6i.onrender.com"
+    }
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

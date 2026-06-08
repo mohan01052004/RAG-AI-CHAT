@@ -1,7 +1,21 @@
 import axios from "axios";
 
+// Determine the API base URL:
+// 1. Use REACT_APP_API_URL env var if set at build time (Vercel env var or .env.production)
+// 2. Fall back to Render URL when running on any non-localhost domain (i.e. deployed on Vercel)
+// 3. Fall back to localhost for local development
+const getBaseURL = () => {
+  if (process.env.REACT_APP_API_URL) {
+    return process.env.REACT_APP_API_URL;
+  }
+  if (typeof window !== "undefined" && !window.location.hostname.includes("localhost")) {
+    return "https://rag-ai-chat-st6i.onrender.com";
+  }
+  return "http://127.0.0.1:8000";
+};
+
 const API = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || "http://127.0.0.1:8000"
+  baseURL: getBaseURL()
 });
 
 export const uploadPDF = (formData) =>
