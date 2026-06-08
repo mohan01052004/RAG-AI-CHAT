@@ -1,17 +1,12 @@
 import { useEffect, useState } from "react";
-import ChatBox from "./components/chatbox";
-import AnswerBox from "./components/answerbox";
 import PracticeBox from "./components/practicebox";
 import ChatWithDocs from "./components/ChatWithDocs";
 import { getDocuments } from "./api";
 import './App.css';
 
 function App() {
-  const [answer, setAnswer] = useState(null);
-  const [documentId, setDocumentId] = useState(null);
-  const [subject, setSubject] = useState("");
+  const [subject] = useState("");
   const [hasDocument, setHasDocument] = useState(false);
-  const [documents, setDocuments] = useState([]);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState([]);
   const [activeTab, setActiveTab] = useState("query"); // "query" or "practice"
 
@@ -19,13 +14,12 @@ function App() {
     try {
       const res = await getDocuments();
       const docs = res.data?.documents || [];
-      setDocuments(docs);
       if (docs.length > 0) {
         setHasDocument(true);
         setSelectedDocumentIds(prev => prev.length === 0 ? docs.map(d => d.id) : prev);
       }
     } catch {
-      setDocuments([]);
+      // Ignore
     }
   };
 
