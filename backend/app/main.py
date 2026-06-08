@@ -9,6 +9,11 @@ if sys.platform == "win32":
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes import upload, query, documents, practice, chat
+from app.database import engine
+from app.models import Base
+
+# Automatically create database tables if they do not exist
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI()
 
