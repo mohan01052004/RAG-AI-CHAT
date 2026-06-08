@@ -91,3 +91,17 @@ backend/node_modules/
 
 # Frontend build
 my-app/build/
+
+# SQL dump files
+*.sql
+
+# Test/debug output JSON files
+*_output.json
+chat_mcq_output.json
+practice_output.json
+
+# Debug and scratch scripts
+backend/debug_*.py
+backend/test_*.py
+backend/verify_rag.py
+backend/recreate_index.py
