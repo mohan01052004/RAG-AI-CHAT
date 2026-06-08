@@ -13,7 +13,11 @@ from app.database import engine
 from app.models import Base
 
 # Automatically create database tables if they do not exist
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+    print("Database tables initialized successfully.")
+except Exception as e:
+    print(f"WARNING: Database table initialization failed (server will still start): {e}")
 
 app = FastAPI()
 
