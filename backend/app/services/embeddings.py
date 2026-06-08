@@ -87,22 +87,34 @@ def _embed(texts: list) -> list:
             return [[0.0] * 384 for _ in texts]
 
 
-# ─── Pinecone setup ─────────────────────────────────────────────────────────
+# ─── Pinecone setup (lazy init so missing env vars don't crash at startup) ────
 
-_api_key = os.getenv("PINECONE_API_KEY")
-_index_name = os.getenv("PINECONE_INDEX_NAME") or os.getenv("PINECONE_INDEX")
-
-if not _api_key:
-    raise ValueError("PINECONE_API_KEY environment variable is not set")
-if not _index_name:
-    raise ValueError("PINECONE_INDEX_NAME (or PINECONE_INDEX) environment variable is not set")
-
-_pc = Pinecone(api_key=_api_key)
-_index = _pc.Index(_index_name)
+_pc = None
+_index = None
 
 
 def get_pinecone_index():
-    """Return the shared Pinecone index instance."""
+    """Return (and lazily initialise) the shared Pinecone index instance."""
+    global _pc, _index
+    if _index is not None:
+        return _index
+
+    api_key = os.getenv("PINECONE_API_KEY")
+    index_name = os.getenv("PINECONE_INDEX_NAME") or os.getenv("PINECONE_INDEX")
+
+    if not api_key:
+        raise ValueError(
+            "PINECONE_API_KEY environment variable is not set. "
+            "Please add it in your Render (or local .env) environment variables."
+        )
+    if not index_name:
+        raise ValueError(
+            "PINECONE_INDEX_NAME (or PINECONE_INDEX) environment variable is not set. "
+            "Please add it in your Render (or local .env) environment variables."
+        )
+
+    _pc = Pinecone(api_key=api_key)
+    _index = _pc.Index(index_name)
     return _index
 
 
@@ -136,9 +148,10 @@ def embed_and_store(chunks: list, doc_id: str, filename: str) -> int:
 
     batch_size = 100
     total_stored = 0
+    index = get_pinecone_index()
     for idx in range(0, len(vectors), batch_size):
         batch = vectors[idx:idx + batch_size]
-        _index.upsert(vectors=batch)
+        index.upsert(vectors=batch)
         total_stored += len(batch)
 
     return total_stored
@@ -163,7 +176,8 @@ def query_similar(query: str, top_k: int = 5, doc_id=None) -> list:
         else:
             query_kwargs["filter"] = {"doc_id": {"$eq": str(doc_id)}}
 
-    response = _index.query(**query_kwargs)
+    index = get_pinecone_index()
+    response = index.query(**query_kwargs)
 
     results = []
     for match in response.matches:
