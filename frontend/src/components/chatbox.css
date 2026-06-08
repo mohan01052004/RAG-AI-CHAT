@@ -1,0 +1,308 @@
+.chatbox-container {
+  width: 100%;
+  margin-top: 30px;
+}
+
+.chatbox-documents {
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+  padding: 10px 12px;
+  position: relative;
+  backdrop-filter: blur(12px);
+  z-index: 10;
+}
+
+.chatbox-documents-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chatbox-documents-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #9ca3af;
+}
+
+.chatbox-documents-button {
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a5b4fc;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.chatbox-documents-button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #6366f1;
+  color: white;
+}
+
+.chatbox-documents-panel {
+  margin-top: 12px;
+  padding: 16px;
+  background: #110d26;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 320px;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.chatbox-documents-all {
+  font-weight: 600;
+  color: #a5b4fc;
+}
+
+.chatbox-documents-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.08);
+  margin: 10px 0;
+}
+
+.chatbox-documents-list {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.chatbox-documents-checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 13px;
+  color: #cbd5e1;
+}
+
+.chatbox-documents-checkbox-item:hover:not(.disabled) {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chatbox-documents-checkbox-item:hover:not(.disabled) span {
+  color: #ffffff !important;
+}
+
+.chatbox-documents-checkbox-item.disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chatbox-documents-checkbox-item.disabled input {
+  cursor: not-allowed;
+}
+
+.chatbox-documents-checkbox-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+  accent-color: #6366f1;
+  flex-shrink: 0;
+}
+
+.chatbox-documents-checkbox-item input[type="checkbox"]:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.chatbox-documents-checkbox-item span {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.chatbox-documents-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.chatbox-documents-action-cancel,
+.chatbox-documents-action-ok {
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: none;
+}
+
+.chatbox-documents-action-cancel {
+  color: #9ca3af;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chatbox-documents-action-cancel:hover {
+  background: rgba(255, 255, 255, 0.03);
+  color: white;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.chatbox-documents-action-ok {
+  color: white;
+  background: #6366f1;
+}
+
+.chatbox-documents-action-ok:hover {
+  background: #4f46e5;
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.2);
+}
+
+.chatbox-input-wrapper {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 14px;
+  padding: 8px 12px;
+  transition: all 0.2s ease;
+  backdrop-filter: blur(12px);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+}
+
+.chatbox-input-wrapper:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.2);
+}
+
+.chatbox-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 15px;
+  padding: 8px 12px;
+  color: white;
+  background: transparent;
+  font-family: inherit;
+}
+
+.chatbox-input::placeholder {
+  color: #6b7280;
+}
+
+.chatbox-send-button {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  font-family: inherit;
+}
+
+.chatbox-send-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.3);
+}
+
+.chatbox-send-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.chatbox-hint {
+  margin-top: 12px;
+  font-size: 13px;
+  color: #6b7280;
+  text-align: center;
+}
+
+.chatbox-mode-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 3px;
+  border-radius: 8px;
+}
+
+.chatbox-mode-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9ca3af;
+  margin: 0 6px 0 4px;
+}
+
+.chatbox-mode-toggle-btn {
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: transparent;
+  color: #9ca3af;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.chatbox-mode-toggle-btn:hover {
+  color: white;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.chatbox-mode-toggle-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #a855f7 100%);
+  color: white;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
+.chatbox-mode-toggle-btn.disabled,
+.chatbox-mode-toggle-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.chatbox-mode-toggle-btn.disabled:hover,
+.chatbox-mode-toggle-btn:disabled:hover {
+  color: #9ca3af;
+  background: transparent;
+}
+
+/* Mobile responsive adjustments */
+@media (max-width: 480px) {
+  .chatbox-container {
+    margin-top: 20px;
+  }
+  .chatbox-input-wrapper {
+    flex-direction: column;
+    gap: 8px;
+    padding: 8px;
+  }
+  .chatbox-input {
+    width: 100%;
+    font-size: 14px;
+  }
+  .chatbox-send-button {
+    width: 100%;
+    padding: 10px;
+  }
+}

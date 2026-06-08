@@ -1,0 +1,71 @@
+[
+  {
+    "question": "What term refers to the ability of a deep learning network to represent complex inputs due to its multiple layers?",
+    "options": [
+      {
+        "label": "A",
+        "text": "Scalability"
+      },
+      {
+        "label": "B",
+        "text": "Expressive power"
+      },
+      {
+        "label": "C",
+        "text": "Parallelization"
+      },
+      {
+        "label": "D",
+        "text": "Computational Complexity"
+      }
+    ],
+    "correct_answer": "B",
+    "explanation": null
+  },
+  {
+    "question": "What is the main issue with computing the gradient of the loss function using the entire dataset, according to equation (8.6)?",
+    "options": [
+      {
+        "label": "A",
+        "text": "It requires a large number of computations"
+      },
+      {
+        "label": "B",
+        "text": "It is very expensive and requires evaluating the model on every example"
+      },
+      {
+        "label": "C",
+        "text": "It is not a major concern in current deep learning architectures"
+      },
+      {
+        "label": "D",
+        "text": "It is a desirable property of the gradient"
+      }
+    ],
+    "correct_answer": "B",
+    "explanation": null
+  },
+  {
+    "question": "Which of the following statements about optimization algorithms is true?",
+    "options": [
+      {
+        "label": "A",
+        "text": "They converge much faster if they are allowed to slowly compute the exact gradient"
+      },
+      {
+        "label": "B",
+        "text": "They converge much faster if they are allowed to rapidly compute approximate estimates of the gradient"
+      },
+      {
+        "label": "C",
+        "text": "They have no correlation with the number of examples used to estimate the gradient"
+      },
+      {
+        "label": "D",
+        "text": "They always converge to the optimal solution"
+      }
+    ],
+    "correct_answer": "B",
+    "explanation": null
+  }
+]
