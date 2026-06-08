@@ -92,7 +92,8 @@ export default function PracticeBox({ subject, documentIds }) {
       setScore(res.data.score);
       setShowSolution(true);
     } catch (error) {
-      alert("Submission failed. Try again.");
+      const errorMsg = error.response?.data?.detail || "Submission failed. Try again.";
+      alert(errorMsg);
     } finally {
       setIsSubmitting(false);
     }
