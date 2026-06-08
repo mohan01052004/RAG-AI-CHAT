@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import API from "../api";
 
 export default function ChatWithDocs({ onUploaded }) {
   const [file, setFile] = useState(null);
@@ -26,7 +26,7 @@ export default function ChatWithDocs({ onUploaded }) {
   // ─── Fetch all docs from server ───────────────────────────────────────────
   const fetchAllDocuments = async () => {
     try {
-      const response = await axios.get("http://127.0.0.1:8000/documents");
+      const response = await API.get("/documents");
       setAllDocs(response.data.documents || []);
     } catch (err) {
       console.error("Failed to fetch documents:", err);
@@ -97,7 +97,7 @@ export default function ChatWithDocs({ onUploaded }) {
     if (!window.confirm("Delete this document? This cannot be undone.")) return;
     setDeletingDocId(docId);
     try {
-      await axios.delete(`http://127.0.0.1:8000/api/documents/${docId}`);
+      await API.delete(`/api/documents/${docId}`);
       // Remove from selected if it was selected
       setSelectedDocIds((prev) => prev.filter((id) => id !== docId));
       // Refresh document list
@@ -134,8 +134,8 @@ export default function ChatWithDocs({ onUploaded }) {
     formData.append("subject", nameToUse); // send as subject/label
 
     try {
-      const response = await axios.post(
-        "http://127.0.0.1:8000/api/documents/upload",
+      const response = await API.post(
+        "/api/documents/upload",
         formData,
         { headers: { "Content-Type": "multipart/form-data" } }
       );
@@ -185,7 +185,7 @@ export default function ChatWithDocs({ onUploaded }) {
     try {
       let response;
       if (isGeneralMode) {
-        response = await axios.post("http://127.0.0.1:8000/api/chat", {
+        response = await API.post("/api/chat", {
           message: currentMsg,
         });
       } else {
@@ -195,7 +195,7 @@ export default function ChatWithDocs({ onUploaded }) {
             ? null
             : selectedDocIds.map(String);
 
-        response = await axios.post("http://127.0.0.1:8000/api/chat/rag", {
+        response = await API.post("/api/chat/rag", {
           message: currentMsg,
           conversation_history: updatedHistory.map((h) => ({
             role: h.role,

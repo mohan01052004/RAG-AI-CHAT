@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
-import axios from "axios";
-import { generatePractice, submitPractice } from "../api";
+import { generatePractice, submitPractice, getDocuments } from "../api";
 import "./practicebox.css";
 
 export default function PracticeBox({ subject, documentIds }) {
@@ -23,7 +22,7 @@ export default function PracticeBox({ subject, documentIds }) {
   const [selectedIds, setSelectedIds] = useState([]); // which docs to quiz from
 
   useEffect(() => {
-    axios.get("http://127.0.0.1:8000/documents")
+    getDocuments()
       .then(res => {
         const docs = res.data?.documents || [];
         setAllDocs(docs);
