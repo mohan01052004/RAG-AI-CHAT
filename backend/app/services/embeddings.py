@@ -35,10 +35,17 @@ def _embed_via_hf_api(texts: list) -> list:
         "inputs": texts,
         "options": {"wait_for_model": True}
     }
-    response = requests.post(_HF_API_URL, headers=headers, json=payload, timeout=60)
-    response.raise_for_status()
-    result = response.json()
-    return result  # list of embedding vectors
+    try:
+        response = requests.post(_HF_API_URL, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logging.warning(f"Primary HF API endpoint failed: {e}. Trying hf-mirror.com fallback...")
+        # Fallback to official mirror which resolves to a different DNS/IP
+        mirror_url = _HF_API_URL.replace("api-inference.huggingface.co", "api-inference.hf-mirror.com")
+        response = requests.post(mirror_url, headers=headers, json=payload, timeout=20)
+        response.raise_for_status()
+        return response.json()
 
 
 def _embed_via_local(texts: list) -> list:
