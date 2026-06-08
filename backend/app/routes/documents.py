@@ -285,6 +285,8 @@ async def upload_document_api(
                 """), chunk)
             db.commit()
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Failed to store chunks: {str(e)}")
 
@@ -301,6 +303,8 @@ async def upload_document_api(
             chunks_text = [c["content"] for c in chunks_to_insert]
             embed_and_store(chunks_text, str(doc_id), filename)
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             raise HTTPException(status_code=500, detail=f"Failed to store vector embeddings: {str(e)}")
 
     return {
