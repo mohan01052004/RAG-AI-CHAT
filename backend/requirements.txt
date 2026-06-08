@@ -9,6 +9,7 @@ pymupdf
 pypdf
 requests
 huggingface-hub
+python-docx
 langchain>=0.1.14
 langchain-core>=0.1.40
 langchain-community>=0.0.30

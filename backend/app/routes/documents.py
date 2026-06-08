@@ -1,5 +1,4 @@
 import io
-import PyPDF2
 import docx
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
 from sqlalchemy.orm import Session
@@ -147,16 +146,18 @@ async def upload_document_api(
                     print(f"[documents] fitz failed: {e_fitz}")
                     extracted_pages = []
 
-            # 3. Try legacy PyPDF2 if both failed
+            # 3. Retry pypdf with seek reset if both fitz and first pypdf failed
             if not extracted_pages:
                 try:
-                    reader = PyPDF2.PdfReader(pdf_file)
+                    import pypdf as _pypdf2_retry
+                    pdf_file.seek(0)
+                    reader = _pypdf2_retry.PdfReader(pdf_file)
                     for page_idx, page in enumerate(reader.pages):
                         text_content = page.extract_text() or ""
                         extracted_pages.append((page_idx + 1, text_content))
-                    print(f"[documents] Successfully extracted text using PyPDF2: {len(extracted_pages)} pages")
-                except Exception as e_pypdf2:
-                    print(f"[documents] PyPDF2 failed: {e_pypdf2}")
+                    print(f"[documents] Successfully extracted text (pypdf retry): {len(extracted_pages)} pages")
+                except Exception as e_retry:
+                    print(f"[documents] pypdf retry failed: {e_retry}")
                     extracted_pages = []
 
             # 4. If extracted text is empty/meaningless (scanned/image-only PDF), fallback to Gemini OCR
