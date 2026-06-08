@@ -1,32 +1,72 @@
+"""
+Embeddings service — uses HuggingFace Inference API in production
+(no local PyTorch/sentence-transformers model loaded).
+Falls back to local SentenceTransformer for local development if HF API key is missing.
+"""
 import os
 import logging
-from sentence_transformers import SentenceTransformer
+import requests
 from pinecone import Pinecone
 from dotenv import load_dotenv
 
-# Ensure env vars are loaded
 load_dotenv(override=True)
 
-# Suppress warnings
 os.environ.setdefault("TRANSFORMERS_VERBOSITY", "error")
 os.environ.setdefault("HF_HUB_DISABLE_TELEMETRY", "1")
 os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
-logging.getLogger("transformers").setLevel(logging.ERROR)
-logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 
-# Module-level singletons loaded on startup
-_model = None
+_HF_API_KEY = os.getenv("HUGGINGFACE_API_KEY")
+_HF_MODEL = os.getenv("HUGGINGFACE_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2")
+_HF_API_URL = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{_HF_MODEL}"
+
+# Local model fallback (only used if HF API key is not set — i.e. local dev without key)
+_local_model = None
 
 
-def _get_model():
-    global _model
-    if _model is None:
-        logging.info("Loading SentenceTransformer model 'all-MiniLM-L6-v2'...")
+def _embed_via_hf_api(texts: list) -> list:
+    """Call HuggingFace Inference API to generate embeddings remotely."""
+    headers = {"Authorization": f"Bearer {_HF_API_KEY}"}
+    payload = {
+        "inputs": texts,
+        "options": {"wait_for_model": True}
+    }
+    response = requests.post(_HF_API_URL, headers=headers, json=payload, timeout=60)
+    response.raise_for_status()
+    result = response.json()
+    return result  # list of embedding vectors
+
+
+def _embed_via_local(texts: list) -> list:
+    """Load and use local SentenceTransformer model (development fallback)."""
+    global _local_model
+    if _local_model is None:
+        logging.info("Loading local SentenceTransformer model (dev fallback)...")
         from sentence_transformers import SentenceTransformer
-        _model = SentenceTransformer("all-MiniLM-L6-v2")
-        logging.info("SentenceTransformer model loaded successfully.")
-    return _model
+        _local_model = SentenceTransformer("all-MiniLM-L6-v2")
+    embeddings = _local_model.encode(texts)
+    return [e.tolist() for e in embeddings]
 
+
+def _embed(texts: list) -> list:
+    """
+    Embed a list of texts.
+    Uses HuggingFace Inference API if key is available (production),
+    otherwise falls back to local model (development).
+    """
+    if isinstance(texts, str):
+        texts = [texts]
+
+    if _HF_API_KEY:
+        try:
+            return _embed_via_hf_api(texts)
+        except Exception as e:
+            logging.warning(f"HF API embedding failed ({e}), falling back to local model...")
+            return _embed_via_local(texts)
+    else:
+        return _embed_via_local(texts)
+
+
+# ─── Pinecone setup ─────────────────────────────────────────────────────────
 
 _api_key = os.getenv("PINECONE_API_KEY")
 _index_name = os.getenv("PINECONE_INDEX_NAME") or os.getenv("PINECONE_INDEX")
@@ -45,21 +85,22 @@ def get_pinecone_index():
     return _index
 
 
-def embed_and_store(chunks: list[str], doc_id: str, filename: str) -> int:
+# ─── Public API ─────────────────────────────────────────────────────────────
+
+def embed_and_store(chunks: list, doc_id: str, filename: str) -> int:
     """
-    For each chunk:
-    - Generate embedding using sentence-transformers (all-MiniLM-L6-v2)
-    - Upsert to Pinecone in batches of 100 to avoid rate limits
-    - Return total number of chunks stored
+    Embed each chunk via HF Inference API (or local fallback),
+    then upsert to Pinecone in batches of 100.
+    Returns total number of chunks stored.
     """
     if not chunks:
         return 0
 
-    embeddings = _get_model().encode(chunks)
+    embeddings = _embed(chunks)
     vectors = []
-    
-    for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-        emb_list = embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+    for i, (chunk, emb) in enumerate(zip(chunks, embeddings)):
+        emb_list = emb if isinstance(emb, list) else list(emb)
         vectors.append({
             "id": f"{doc_id}_chunk_{i}",
             "values": emb_list,
@@ -82,33 +123,27 @@ def embed_and_store(chunks: list[str], doc_id: str, filename: str) -> int:
     return total_stored
 
 
-def query_similar(query: str, top_k: int = 5, doc_id: str = None) -> list[dict]:
+def query_similar(query: str, top_k: int = 5, doc_id=None) -> list:
     """
-    - Embed the query using sentence-transformers (all-MiniLM-L6-v2)
-    - Query Pinecone for top_k nearest vectors
-    - If doc_id is provided, filter by metadata: {"doc_id": {"$eq": doc_id}}
-    - Return list of dicts with: content, filename, chunk_index, doc_id, score
+    Embed query then search Pinecone for top_k nearest vectors.
+    Optional doc_id (str or list) filters by metadata.
     """
-    query_vector = _get_model().encode(query).tolist()
-    
+    query_vector = _embed([query])[0]
+
     query_kwargs = {
         "vector": query_vector,
         "top_k": top_k,
         "include_metadata": True
     }
-    
+
     if doc_id is not None:
         if isinstance(doc_id, list):
-            query_kwargs["filter"] = {
-                "doc_id": {"$in": [str(d) for d in doc_id]}
-            }
+            query_kwargs["filter"] = {"doc_id": {"$in": [str(d) for d in doc_id]}}
         else:
-            query_kwargs["filter"] = {
-                "doc_id": {"$eq": str(doc_id)}
-            }
+            query_kwargs["filter"] = {"doc_id": {"$eq": str(doc_id)}}
 
     response = _index.query(**query_kwargs)
-    
+
     results = []
     for match in response.matches:
         meta = match.metadata or {}
@@ -119,13 +154,24 @@ def query_similar(query: str, top_k: int = 5, doc_id: str = None) -> list[dict]:
             "doc_id": meta.get("doc_id", ""),
             "score": match.score
         })
-        
+
     return results
 
 
-# Maintain backward compatibility with existing codebase
+def embed_text(text: str) -> list:
+    """Embed a single text string and return a float vector."""
+    return _embed([text])[0]
+
+
+def embed_batch(texts: list) -> list:
+    """Embed a batch of texts and return a list of float vectors."""
+    return _embed(texts)
+
+
+# Backward compatibility shim
 class EmbeddingModel:
     def embed_query(self, text):
-        return _get_model().encode(text).tolist()
+        return embed_text(text)
+
 
 embedding_model = EmbeddingModel()

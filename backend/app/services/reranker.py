@@ -1,31 +1,42 @@
 """
 Cross-Encoder Reranking Service for RAG Pipeline
-Phase 3: Advanced Reranking
 
 Cross-encoders provide more accurate relevance scoring by processing
 query-document pairs jointly, unlike bi-encoders which encode separately.
+
+In memory-constrained environments (e.g. Render free tier), set
+DISABLE_RERANKER=true to skip loading the CrossEncoder model and
+return results in their original Pinecone vector-score order instead.
 """
 
-from sentence_transformers import CrossEncoder
+import os
 import numpy as np
 from typing import List, Tuple, Optional
+
+# Set DISABLE_RERANKER=true in production to save ~200MB RAM on free hosting
+_DISABLE_RERANKER = os.getenv("DISABLE_RERANKER", "false").lower() == "true"
 
 # Global model instance for efficiency
 _reranker_model = None
 _model_name = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 
+
 def _get_reranker_model():
-    """Lazy load cross-encoder model"""
+    """Lazy load cross-encoder model (skipped when DISABLE_RERANKER=true)."""
     global _reranker_model
+    if _DISABLE_RERANKER:
+        return None
     if _reranker_model is None:
         try:
             print(f"🔄 Loading cross-encoder model: {_model_name}")
+            from sentence_transformers import CrossEncoder
             _reranker_model = CrossEncoder(_model_name, max_length=512)
             print(f"✅ Cross-encoder model loaded successfully")
         except Exception as e:
             print(f"❌ Failed to load cross-encoder: {e}")
             _reranker_model = None
     return _reranker_model
+
 
 
 def rerank_results(

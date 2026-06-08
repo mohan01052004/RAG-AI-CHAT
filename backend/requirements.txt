@@ -7,7 +7,7 @@ sqlalchemy
 psycopg2-binary
 pymupdf
 pypdf
-sentence-transformers
+requests
 huggingface-hub
 langchain>=0.1.14
 langchain-core>=0.1.40
