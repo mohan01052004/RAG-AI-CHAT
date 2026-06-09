@@ -68,54 +68,82 @@ def _is_quota_error(error_msg: str) -> bool:
 
 @router.post("/api/chat/rag")
 async def chat_rag(request: ChatRequest, db: Session = Depends(get_db)):
-    # Call retrieve_relevant_chunks
+    results = []
+
+    # ── 1. Try Pinecone vector search first ───────────────────────────────────
     try:
         results = retrieve_relevant_chunks(request.message, top_k=5, doc_id=request.doc_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Retrieval failed: {str(e)}")
+        print(f"[CHAT/RAG] Pinecone retrieval failed (will use DB fallback): {e}")
+        results = []
 
-    # Fallback to database chunk retrieval for general summary or meta queries when similarity score is low
+    # ── 2. PostgreSQL full-text fallback (always runs when Pinecone has no results) ──
     if not results:
-        query_lower = request.message.lower()
-        doc_keywords = ["summary", "summarize", "overview", "tell me about", "what is this", "about this", "this pdf", "this document", "this file", "what does this", "what is the pdf", "what is the document"]
-        if any(kw in query_lower for kw in doc_keywords):
-            try:
-                # Determine target doc_ids
-                target_ids = []
-                if request.doc_id:
-                    if isinstance(request.doc_id, list):
-                        target_ids = [int(d) for d in request.doc_id if str(d).isdigit()]
-                    elif str(request.doc_id).isdigit():
-                        target_ids = [int(request.doc_id)]
-                
-                if not target_ids:
-                    # Fallback to overall most recently uploaded doc
-                    row = db.execute(text("""
-                        SELECT doc_id FROM document_chunks 
-                        ORDER BY id DESC LIMIT 1
-                    """)).fetchone()
-                    if row:
-                        target_ids = [row[0]]
-                
-                if target_ids:
-                    # Fetch first 5 chunks of the target documents
+        try:
+            # Determine target doc_ids from request
+            target_ids = []
+            if request.doc_id:
+                if isinstance(request.doc_id, list):
+                    target_ids = [int(d) for d in request.doc_id if str(d).isdigit()]
+                elif str(request.doc_id).isdigit():
+                    target_ids = [int(request.doc_id)]
+
+            # Build query — keyword search using ILIKE across PostgreSQL chunks
+            query_words = [w for w in request.message.split() if len(w) > 3][:6]
+            search_pattern = "%" + "%".join(query_words[:3]) + "%" if query_words else "%"
+
+            if target_ids:
+                db_chunks = db.execute(text("""
+                    SELECT content, page_num, chunk_index, filename, doc_id
+                    FROM document_chunks
+                    WHERE doc_id = ANY(:doc_ids)
+                      AND content ILIKE :pattern
+                    ORDER BY chunk_index ASC
+                    LIMIT 5
+                """), {"doc_ids": target_ids, "pattern": search_pattern}).fetchall()
+
+                # If keyword search got nothing, grab first chunks of the doc
+                if not db_chunks:
                     db_chunks = db.execute(text("""
-                        SELECT content, page_num, chunk_index, filename, doc_id 
-                        FROM document_chunks 
-                        WHERE doc_id IN :doc_ids 
-                        ORDER BY doc_id DESC, chunk_index ASC LIMIT 5
-                    """), {"doc_ids": tuple(target_ids)}).fetchall()
-                    
-                    results = [{
-                        "content": c[0],
-                        "page_num": c[1],
-                        "chunk_index": c[2],
-                        "filename": c[3],
-                        "doc_id": str(c[4]),
-                        "score": 0.5
-                    } for c in db_chunks]
-            except Exception as e:
-                print(f"[CHAT/RAG] Database fallback retrieval failed: {e}")
+                        SELECT content, page_num, chunk_index, filename, doc_id
+                        FROM document_chunks
+                        WHERE doc_id = ANY(:doc_ids)
+                        ORDER BY chunk_index ASC
+                        LIMIT 5
+                    """), {"doc_ids": target_ids}).fetchall()
+            else:
+                # No specific doc — keyword search across all chunks
+                db_chunks = db.execute(text("""
+                    SELECT content, page_num, chunk_index, filename, doc_id
+                    FROM document_chunks
+                    WHERE content ILIKE :pattern
+                    ORDER BY id DESC
+                    LIMIT 5
+                """), {"pattern": search_pattern}).fetchall()
+
+                # Still nothing — get latest chunks
+                if not db_chunks:
+                    db_chunks = db.execute(text("""
+                        SELECT content, page_num, chunk_index, filename, doc_id
+                        FROM document_chunks
+                        ORDER BY id DESC
+                        LIMIT 5
+                    """)).fetchall()
+
+            results = [{
+                "content": c[0],
+                "page_num": c[1],
+                "chunk_index": c[2],
+                "filename": c[3],
+                "doc_id": str(c[4]),
+                "score": 0.5
+            } for c in db_chunks]
+
+            if results:
+                print(f"[CHAT/RAG] Using PostgreSQL full-text fallback — {len(results)} chunks found")
+        except Exception as e:
+            print(f"[CHAT/RAG] PostgreSQL fallback also failed: {e}")
+            results = []
 
     # Build prompt based on retrieval results
     if results:

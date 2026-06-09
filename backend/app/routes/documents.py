@@ -290,7 +290,8 @@ async def upload_document_api(
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Failed to store chunks: {str(e)}")
 
-        # Store in Pinecone vector DB
+        # Store in Pinecone vector DB (non-fatal — upload still succeeds if Pinecone fails)
+        pinecone_ok = False
         try:
             try:
                 from app.services.embeddings import embed_and_store
@@ -302,14 +303,18 @@ async def upload_document_api(
             
             chunks_text = [c["content"] for c in chunks_to_insert]
             embed_and_store(chunks_text, str(doc_id), filename)
+            pinecone_ok = True
+            print(f"[UPLOAD] Pinecone vector storage successful for doc_id={doc_id}")
         except Exception as e:
             import traceback
             traceback.print_exc()
-            raise HTTPException(status_code=500, detail=f"Failed to store vector embeddings: {str(e)}")
+            print(f"[UPLOAD] WARNING: Pinecone vector storage failed (non-fatal): {e}")
+            print(f"[UPLOAD] Document saved to PostgreSQL — chat will use DB full-text search fallback.")
 
     return {
         "doc_id": doc_id,
-        "chunk_count": len(chunks_to_insert)
+        "chunk_count": len(chunks_to_insert),
+        "vector_indexed": pinecone_ok if chunks_to_insert else False
     }
 
 
