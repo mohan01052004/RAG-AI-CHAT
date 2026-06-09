@@ -200,33 +200,23 @@ Be detailed and accurate."""
                 response = chat.send_message(user_message)
                 answer = response.text
             except Exception as inner_e:
-                inner_msg = str(inner_e)
-                if _is_quota_error(inner_msg):
-                    # Try fallback Gemini model first
-                    try:
-                        fallback_model = "gemini-flash-latest"
-                        print(f"[CHAT/RAG GEMINI FALLBACK] Trying '{fallback_model}'...")
-                        chat = client.chats.create(
-                            model=fallback_model,
-                            history=gemini_history,
-                            config=types.GenerateContentConfig(
-                                system_instruction=system_instruction
-                            )
+                print(f"[CHAT/RAG] Primary Gemini model failed: {inner_e}. Trying fallback model...")
+                try:
+                    fallback_model = "gemini-1.5-flash"
+                    chat = client.chats.create(
+                        model=fallback_model,
+                        history=gemini_history,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction
                         )
-                        response = chat.send_message(user_message)
-                        answer = response.text
-                    except Exception:
-                        # Gemini fully exhausted — fall through to Groq
-                        print("[CHAT/RAG] Gemini quota exhausted. Switching to Groq...")
-                        answer = None
-                else:
-                    raise inner_e
+                    )
+                    response = chat.send_message(user_message)
+                    answer = response.text
+                except Exception as fallback_e:
+                    print(f"[CHAT/RAG] Fallback Gemini model also failed: {fallback_e}. Switching to Groq...")
+                    answer = None
         except Exception as e:
-            err_msg = str(e)
-            if not _is_quota_error(err_msg):
-                raise HTTPException(status_code=500, detail=f"Gemini API call failed: {err_msg}")
-            # Quota error — fall through to Groq
-            print(f"[CHAT/RAG] Gemini error: {err_msg}. Falling back to Groq...")
+            print(f"[CHAT/RAG] Gemini setup failed: {e}. Falling back to Groq...")
             answer = None
 
     # ── Groq fallback ─────────────────────────────────────────────────────────
@@ -296,29 +286,22 @@ async def general_chat(request: GeneralChatRequest):
                 )
                 answer = response.text
             except Exception as inner_e:
-                inner_msg = str(inner_e)
-                if _is_quota_error(inner_msg):
-                    try:
-                        fallback_model = "gemini-flash-latest"
-                        print(f"[CHAT GEMINI FALLBACK] Trying '{fallback_model}'...")
-                        response = client.models.generate_content(
-                            model=fallback_model,
-                            contents=request.message,
-                            config=types.GenerateContentConfig(
-                                system_instruction=system_instruction
-                            )
+                print(f"[CHAT] Primary Gemini model failed: {inner_e}. Trying fallback model...")
+                try:
+                    fallback_model = "gemini-1.5-flash"
+                    response = client.models.generate_content(
+                        model=fallback_model,
+                        contents=request.message,
+                        config=types.GenerateContentConfig(
+                            system_instruction=system_instruction
                         )
-                        answer = response.text
-                    except Exception:
-                        print("[CHAT] Gemini quota exhausted. Switching to Groq...")
-                        answer = None
-                else:
-                    raise inner_e
+                    )
+                    answer = response.text
+                except Exception as fallback_e:
+                    print(f"[CHAT] Fallback Gemini model also failed: {fallback_e}. Switching to Groq...")
+                    answer = None
         except Exception as e:
-            err_msg = str(e)
-            if not _is_quota_error(err_msg):
-                raise HTTPException(status_code=500, detail=f"Gemini API call failed: {err_msg}")
-            print(f"[CHAT] Gemini error: {err_msg}. Falling back to Groq...")
+            print(f"[CHAT] Gemini setup failed: {e}. Falling back to Groq...")
             answer = None
 
     # ── Groq fallback ─────────────────────────────────────────────────────────
