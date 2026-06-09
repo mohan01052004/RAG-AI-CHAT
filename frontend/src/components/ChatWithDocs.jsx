@@ -5,6 +5,7 @@ export default function ChatWithDocs({ onUploaded }) {
   const [file, setFile] = useState(null);
   const [docName, setDocName] = useState(""); // user-given name for the document
   const [uploadStatus, setUploadStatus] = useState(""); // "", "uploading", "done", "error"
+  const [uploadError, setUploadError] = useState(""); // actual error message to display
   const [uploadedDocs, setUploadedDocs] = useState([]);
 
   const [allDocs, setAllDocs] = useState([]);
@@ -134,11 +135,10 @@ export default function ChatWithDocs({ onUploaded }) {
     formData.append("subject", nameToUse); // send as subject/label
 
     try {
-      const response = await API.post(
-        "/api/documents/upload",
-        formData,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
+      // DO NOT set Content-Type manually — Axios sets it automatically with the
+      // correct multipart boundary when FormData is passed. Manually setting it
+      // without the boundary causes the backend to fail parsing the form.
+      const response = await API.post("/api/documents/upload", formData);
 
       const { doc_id, chunk_count } = response.data;
       const newDoc = {
@@ -150,6 +150,7 @@ export default function ChatWithDocs({ onUploaded }) {
 
       setUploadedDocs((prev) => [...prev, newDoc]);
       setUploadStatus("done");
+      setUploadError("");
       setFile(null);
       setDocName("");
       fetchAllDocuments();
@@ -159,7 +160,13 @@ export default function ChatWithDocs({ onUploaded }) {
       const fileInput = document.getElementById("file-upload-input");
       if (fileInput) fileInput.value = "";
     } catch (err) {
-      console.error(err);
+      console.error("Upload error:", err);
+      // Show the actual backend error message if available
+      const detail = err?.response?.data?.detail;
+      const status = err?.response?.status;
+      const networkErr = !err?.response ? "Network error — cannot reach server" : null;
+      const msg = networkErr || (detail ? `${detail}` : status ? `Server error ${status}` : err.message || "Unknown error");
+      setUploadError(msg);
       setUploadStatus("error");
     }
   };
@@ -396,7 +403,7 @@ export default function ChatWithDocs({ onUploaded }) {
             >
               {uploadStatus === "uploading" && "Uploading document…"}
               {uploadStatus === "done" && "✓ Done"}
-              {uploadStatus === "error" && "✗ Upload failed"}
+              {uploadStatus === "error" && `✗ ${uploadError || "Upload failed"}`}
             </span>
           )}
         </div>
