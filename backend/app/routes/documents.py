@@ -76,8 +76,9 @@ async def upload_document_api(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file content: {str(e)}")
 
-    # Ensure PostgreSQL table exists
+    # Ensure PostgreSQL table exists with the correct schema
     try:
+        # Create table if it doesn't exist at all
         db.execute(text("""
             CREATE TABLE IF NOT EXISTS document_chunks (
                 id SERIAL PRIMARY KEY,
@@ -89,6 +90,29 @@ async def upload_document_api(
             );
         """))
         db.commit()
+
+        # If the table existed with a different schema (e.g. 'document_id' instead of 'doc_id'),
+        # add the 'doc_id' column if it's missing. This handles Render DB schema drift.
+        db.execute(text("""
+            ALTER TABLE document_chunks
+            ADD COLUMN IF NOT EXISTS doc_id INTEGER;
+        """))
+        db.commit()
+
+        # Also add other columns that might be missing from older schema versions
+        for col_def in [
+            "content TEXT",
+            "page_num INTEGER",
+            "chunk_index INTEGER",
+            "filename VARCHAR(255)"
+        ]:
+            col_name = col_def.split()[0]
+            try:
+                db.execute(text(f"ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS {col_def};"))
+                db.commit()
+            except Exception:
+                db.rollback()
+
     except Exception as e:
         db.rollback()
         raise HTTPException(status_code=500, detail=f"Database table initialization failed: {str(e)}")
