@@ -201,123 +201,95 @@ def generate_practice_problems(
 ) -> List[PracticeProblem]:
     """
     Generate practice problems with specified difficulty from uploaded content.
-    
-    Args:
-        topic: Specific topic to generate problems from
-        subject: Subject filter
-        difficulty: easy, medium, or hard
-        count: Number of problems to generate
-        question_type: mcq, theory, or numerical
-        document_id: Single document to search
-        document_ids: Multiple documents to search
-    
-    Returns:
-        List of PracticeProblem objects
+
+    Strategy (most reliable first):
+    1. Always fetch context from PostgreSQL directly (no embeddings needed).
+    2. Optionally enrich via vector search if the embedding service is healthy.
+    3. Generate via Groq (reliable) → Gemini → rule-based fallback.
     """
-    
-    # Build search query
-    search_terms = []
-    if topic:
-        search_terms.append(topic)
-    if subject and subject.lower() != "general":
-        search_terms.append(subject)
 
-    if not search_terms:
-        # Fetch document details from DB for a search-friendly query
-        try:
-            from app.database import SessionLocal
-            from app.models import Document
-            db = SessionLocal()
-            try:
-                if document_ids:
-                    docs = db.query(Document).filter(Document.id.in_(document_ids)).all()
-                elif document_id:
-                    docs = db.query(Document).filter(Document.id == document_id).all()
-                else:
-                    docs = []
-                for doc in docs:
-                    if doc.subject and doc.subject.lower() != "general":
-                        search_terms.append(doc.subject)
-                    filename_clean = doc.filename.rsplit('.', 1)[0] if '.' in doc.filename else doc.filename
-                    filename_clean = filename_clean.replace('_', ' ').replace('-', ' ')
-                    search_terms.append(filename_clean)
-            finally:
-                db.close()
-        except Exception as e:
-            print(f"[PRACTICE] Warning: Could not fetch document metadata: {e}")
-
-    if search_terms:
-        query = " ".join(search_terms) + " key concepts definitions explanations primary details"
-    else:
-        query = "key concepts definitions main topics explanations"
-    
-    # Get difficulty-specific instructions
+    retrieve_count = {"easy": 15, "medium": 25, "hard": 40}.get(difficulty, 25)
     diff_config = _classify_difficulty_prompt(difficulty, question_type)
-    
-    # Retrieve relevant content
-    filters = {}
-    # Note: Disable subject filter as database subjects don't match user input
-    # if subject:
-    #     filters["subject"] = subject
-    if document_ids:
-        filters["doc_id"] = {"$in": [str(d) for d in document_ids]}
-    elif document_id:
-        filters["doc_id"] = {"$eq": str(document_id)}
 
-    # --- Ensure BM25 index is populated (rebuild from PostgreSQL if empty after restart) ---
-    _ensure_bm25_loaded(document_id=document_id, document_ids=document_ids)
-    
-    # Multi-query retrieval for better coverage
-    query_variations = expand_query(query, mode="auto", num_variations=2)
-    
-    def search_fn(q, k):
-        return hybrid_search(q, top_k=k, filters=filters if filters else None)
-    
-    # Retrieve more content for harder questions
-    retrieve_count = {
-        "easy": 15,
-        "medium": 25,
-        "hard": 40
-    }.get(difficulty, 25)
-    
-    candidates = multi_query_retrieve(
-        query_variations,
-        search_fn,
-        top_k_per_query=retrieve_count,
-        final_top_k=retrieve_count,
-        fusion_method="rrf"
+    # ── STEP 1: Fetch from PostgreSQL (primary, always works) ─────────────────
+    context_text = _fetch_context_from_db(
+        document_id=document_id,
+        document_ids=document_ids,
+        max_chunks=retrieve_count
     )
-    
-    candidates = smart_deduplication(candidates, similarity_threshold=0.90)
-    context = rerank_results(query, candidates, top_k=min(len(candidates), retrieve_count))
-    context_text = "\n\n".join([c for c in context if c]).strip()
-    
-    if not context_text:
-        # Fallback: pull chunks directly from PostgreSQL when Pinecone/BM25 returns nothing
-        print("[PRACTICE] Vector search returned no results — falling back to PostgreSQL full-text retrieval")
-        context_text = _fetch_context_from_db(
-            document_id=document_id,
-            document_ids=document_ids,
-            max_chunks=retrieve_count
+    print(f"[PRACTICE] PostgreSQL context: {len(context_text)} chars")
+
+    # ── STEP 2: Try vector search to enrich (best-effort, non-fatal) ──────────
+    try:
+        search_terms = []
+        if topic:
+            search_terms.append(topic)
+        if subject and subject.lower() != "general":
+            search_terms.append(subject)
+        if not search_terms:
+            try:
+                from app.database import SessionLocal
+                from app.models import Document
+                _db = SessionLocal()
+                try:
+                    if document_ids:
+                        docs = _db.query(Document).filter(Document.id.in_(document_ids)).all()
+                    elif document_id:
+                        docs = _db.query(Document).filter(Document.id == document_id).all()
+                    else:
+                        docs = []
+                    for doc in docs:
+                        if doc.subject and doc.subject.lower() != "general":
+                            search_terms.append(doc.subject)
+                        fname = doc.filename.rsplit('.', 1)[0] if '.' in doc.filename else doc.filename
+                        search_terms.append(fname.replace('_', ' ').replace('-', ' '))
+                finally:
+                    _db.close()
+            except Exception:
+                pass
+
+        query = (" ".join(search_terms) + " key concepts definitions") if search_terms else "key concepts definitions main topics"
+
+        filters = {}
+        if document_ids:
+            filters["doc_id"] = {"$in": [str(d) for d in document_ids]}
+        elif document_id:
+            filters["doc_id"] = {"$eq": str(document_id)}
+
+        _ensure_bm25_loaded(document_id=document_id, document_ids=document_ids)
+        # Use rule-based expansion only to avoid Gemini rate-limit during expansion
+        query_variations = expand_query(query, mode="rules", num_variations=2)
+
+        def search_fn(q, k):
+            return hybrid_search(q, top_k=k, filters=filters if filters else None)
+
+        candidates = multi_query_retrieve(
+            query_variations, search_fn,
+            top_k_per_query=retrieve_count,
+            final_top_k=retrieve_count,
+            fusion_method="rrf"
         )
-    
+        if candidates:
+            candidates = smart_deduplication(candidates, similarity_threshold=0.90)
+            reranked = rerank_results(query, candidates, top_k=min(len(candidates), retrieve_count))
+            vector_context = "\n\n".join([c for c in reranked if c]).strip()
+            if vector_context and len(vector_context) > len(context_text):
+                context_text = vector_context
+                print(f"[PRACTICE] Vector search enriched context to {len(context_text)} chars")
+    except Exception as ve:
+        print(f"[PRACTICE] Vector search skipped (non-fatal): {ve}")
+
     if not context_text:
-        # Still no context — truly nothing indexed
+        print("[PRACTICE] No context from any source — cannot generate problems")
         return []
-    
-    # Generate problems based on type
+
+    # ── STEP 3: Generate problems ──────────────────────────────────────────────
     if question_type == "mcq":
-        return _generate_mcq_problems(
-            context_text, count, difficulty, diff_config, subject, topic
-        )
+        return _generate_mcq_problems(context_text, count, difficulty, diff_config, subject, topic)
     elif question_type == "theory":
-        return _generate_theory_problems(
-            context_text, count, difficulty, diff_config, subject, topic
-        )
+        return _generate_theory_problems(context_text, count, difficulty, diff_config, subject, topic)
     elif question_type == "numerical":
-        return _generate_numerical_problems(
-            context_text, count, difficulty, diff_config, subject, topic
-        )
+        return _generate_numerical_problems(context_text, count, difficulty, diff_config, subject, topic)
     else:
         return []
 
@@ -330,7 +302,9 @@ def _generate_mcq_problems(
     subject: Optional[str],
     topic: Optional[str]
 ) -> List[PracticeProblem]:
-    """Generate MCQ problems with specified difficulty"""
+    """Generate MCQ problems with specified difficulty.
+    Tries Groq first (reliable), then Gemini, then rule-based fallback.
+    """
 
     prompt = f"""You are a practice problem generator. Generate {count} multiple-choice questions from the provided document context.
 
@@ -365,10 +339,10 @@ Generate exactly {count} questions in this JSON format:
 IMPORTANT: Return ONLY valid JSON array. No markdown, no extra text.
 Generate {count} {difficulty}-difficulty MCQs now:"""
 
-    result = _generate_with_gemini(prompt, temperature=0.85, max_tokens=2000)
+    result = None
 
-    # Direct Groq fallback if _generate_with_gemini returned nothing
-    if (not result or result == "RATE_LIMIT_EXCEEDED") and GROQ_API_KEY:
+    # ── Try Groq first (most reliable on Render free tier) ──────────────────
+    if GROQ_API_KEY:
         try:
             from groq import Groq
             groq_client = Groq(api_key=GROQ_API_KEY)
@@ -379,10 +353,14 @@ Generate {count} {difficulty}-difficulty MCQs now:"""
                 max_tokens=2000,
             )
             result = groq_resp.choices[0].message.content
-            print(f"[PRACTICE MCQ] Generated via Groq direct fallback")
+            print(f"[PRACTICE MCQ] Generated via Groq")
         except Exception as e:
             print(f"[PRACTICE MCQ GROQ ERROR] {e}")
             result = None
+
+    # ── Gemini fallback ───────────────────────────────────────────────────────
+    if not result or result == "RATE_LIMIT_EXCEEDED":
+        result = _generate_with_gemini(prompt, temperature=0.85, max_tokens=2000)
 
     problems = []
     if result and result != "RATE_LIMIT_EXCEEDED":
