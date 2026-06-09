@@ -29,23 +29,44 @@ _local_model = None
 
 
 def _embed_via_hf_api(texts: list) -> list:
-    """Call HuggingFace Inference API to generate embeddings remotely."""
+    """Call HuggingFace Inference API to generate embeddings remotely.
+    Sends in batches of 32 to avoid request timeouts on large documents.
+    Timeout is 60 seconds to allow for model warm-up on cold start.
+    """
     headers = {"Authorization": f"Bearer {_HF_API_KEY}"}
-    payload = {
-        "inputs": texts,
-        "options": {"wait_for_model": True}
-    }
-    try:
-        response = requests.post(_HF_API_URL, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        return response.json()
-    except Exception as e:
-        logging.warning(f"Primary HF API endpoint failed: {e}. Trying hf-mirror.com fallback...")
-        # Fallback to official mirror which resolves to a different DNS/IP
-        mirror_url = _HF_API_URL.replace("api-inference.huggingface.co", "api-inference.hf-mirror.com")
-        response = requests.post(mirror_url, headers=headers, json=payload, timeout=20)
-        response.raise_for_status()
-        return response.json()
+    all_embeddings = []
+
+    # Process in batches of 32 to avoid timeouts
+    batch_size = 32
+    for i in range(0, len(texts), batch_size):
+        batch = texts[i:i + batch_size]
+        payload = {
+            "inputs": batch,
+            "options": {"wait_for_model": True}
+        }
+        try:
+            response = requests.post(_HF_API_URL, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            batch_embeddings = response.json()
+            # Handle both list-of-lists and list-of-dicts response formats
+            if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
+                if isinstance(batch_embeddings[0], dict):
+                    # Some HF models return {embedding: [...]}
+                    batch_embeddings = [e.get("embedding", e) for e in batch_embeddings]
+            all_embeddings.extend(batch_embeddings)
+        except Exception as e:
+            logging.warning(f"Primary HF API endpoint failed for batch {i//batch_size}: {e}. Trying mirror...")
+            # Fallback to hf-mirror.com
+            mirror_url = _HF_API_URL.replace("api-inference.huggingface.co", "api-inference.hf-mirror.com")
+            response = requests.post(mirror_url, headers=headers, json=payload, timeout=60)
+            response.raise_for_status()
+            batch_embeddings = response.json()
+            if isinstance(batch_embeddings, list) and len(batch_embeddings) > 0:
+                if isinstance(batch_embeddings[0], dict):
+                    batch_embeddings = [e.get("embedding", e) for e in batch_embeddings]
+            all_embeddings.extend(batch_embeddings)
+
+    return all_embeddings
 
 
 def _embed_via_local(texts: list) -> list:
