@@ -94,9 +94,19 @@ async def debug_diagnostics():
     except Exception as e:
         hf_status = f"Failed: {str(e)}"
         
+    pinecone_store_status = "Not tested"
+    try:
+        from app.services.embeddings import embed_and_store
+        res = embed_and_store(["test chunk content"], "test_doc_9999", "diagnostics.txt")
+        pinecone_store_status = f"Success: stored {res} chunks"
+    except Exception as e:
+        import traceback
+        pinecone_store_status = f"Failed: {str(e)}\n{traceback.format_exc()}"
+        
     return {
         "env_vars": env_vars,
         "pinecone_status": pinecone_status,
+        "pinecone_store_status": pinecone_store_status,
         "huggingface_status": hf_status
     }
 
