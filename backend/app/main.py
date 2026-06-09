@@ -63,3 +63,40 @@ async def root():
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
+
+@app.get("/debug/diagnostics")
+async def debug_diagnostics():
+    import os
+    
+    env_vars = {
+        "DATABASE_URL_SET": bool(os.getenv("DATABASE_URL")),
+        "PINECONE_API_KEY_SET": bool(os.getenv("PINECONE_API_KEY")),
+        "PINECONE_INDEX": os.getenv("PINECONE_INDEX"),
+        "PINECONE_INDEX_NAME": os.getenv("PINECONE_INDEX_NAME"),
+        "HUGGINGFACE_API_KEY_SET": bool(os.getenv("HUGGINGFACE_API_KEY")),
+        "GEMINI_API_KEY_SET": bool(os.getenv("GEMINI_API_KEY")),
+    }
+    
+    pinecone_status = "Not tested"
+    try:
+        from app.services.embeddings import get_pinecone_index
+        idx = get_pinecone_index()
+        stats = idx.describe_index_stats()
+        pinecone_status = f"Success: {stats}"
+    except Exception as e:
+        pinecone_status = f"Failed: {str(e)}"
+        
+    hf_status = "Not tested"
+    try:
+        from app.services.embeddings import _embed
+        emb = _embed(["test chunk content"])
+        hf_status = f"Success: embedding shape {len(emb[0]) if emb else 0}"
+    except Exception as e:
+        hf_status = f"Failed: {str(e)}"
+        
+    return {
+        "env_vars": env_vars,
+        "pinecone_status": pinecone_status,
+        "huggingface_status": hf_status
+    }
+
