@@ -8,7 +8,7 @@ Generates practice problems from uploaded content with adjustable difficulty:
 """
 
 from app.services.rag_pipeline import generate_mcqs, _generate_with_gemini
-from app.services.hybrid_search import hybrid_search
+from app.services.hybrid_search import hybrid_search, build_bm25_index, _bm25_index
 from app.services.reranker import rerank_results
 from app.services.query_expansion import expand_query
 from app.services.multi_query_retrieval import multi_query_retrieve, smart_deduplication
@@ -108,6 +108,88 @@ def _classify_difficulty_prompt(difficulty: str, question_type: str) -> dict:
         }
 
 
+def _ensure_bm25_loaded(document_id: Optional[int] = None, document_ids: Optional[List[int]] = None):
+    """
+    If BM25 index is empty (e.g. after server restart), rebuild it from PostgreSQL document_chunks.
+    This ensures newly uploaded documents are always searchable even without Pinecone.
+    """
+    from app.services.hybrid_search import _bm25_index as current_index, build_bm25_index
+    if current_index is not None:
+        return  # Already loaded
+
+    try:
+        from app.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            if document_ids:
+                placeholders = ", ".join([str(int(d)) for d in document_ids])
+                rows = db.execute(
+                    text(f"SELECT content FROM document_chunks WHERE doc_id IN ({placeholders}) AND content IS NOT NULL ORDER BY chunk_index LIMIT 500")
+                ).fetchall()
+            elif document_id:
+                rows = db.execute(
+                    text("SELECT content FROM document_chunks WHERE doc_id = :doc_id AND content IS NOT NULL ORDER BY chunk_index LIMIT 500"),
+                    {"doc_id": int(document_id)}
+                ).fetchall()
+            else:
+                rows = db.execute(
+                    text("SELECT content FROM document_chunks WHERE content IS NOT NULL ORDER BY id DESC LIMIT 500")
+                ).fetchall()
+
+            chunks = [row[0] for row in rows if row[0] and row[0].strip()]
+            if chunks:
+                build_bm25_index(chunks)
+                print(f"[PRACTICE] Rebuilt BM25 index from PostgreSQL with {len(chunks)} chunks")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[PRACTICE] Warning: Could not rebuild BM25 from PostgreSQL: {e}")
+
+
+def _fetch_context_from_db(
+    document_id: Optional[int] = None,
+    document_ids: Optional[List[int]] = None,
+    max_chunks: int = 25
+) -> str:
+    """
+    Fetch document text chunks directly from PostgreSQL as a fallback when
+    Pinecone/vector search returns no results. Returns joined context string.
+    """
+    try:
+        from app.database import SessionLocal
+        from sqlalchemy import text
+        db = SessionLocal()
+        try:
+            if document_ids:
+                placeholders = ", ".join([str(int(d)) for d in document_ids])
+                rows = db.execute(
+                    text(f"SELECT content FROM document_chunks WHERE doc_id IN ({placeholders}) AND content IS NOT NULL ORDER BY chunk_index LIMIT :limit"),
+                    {"limit": max_chunks}
+                ).fetchall()
+            elif document_id:
+                rows = db.execute(
+                    text("SELECT content FROM document_chunks WHERE doc_id = :doc_id AND content IS NOT NULL ORDER BY chunk_index LIMIT :limit"),
+                    {"doc_id": int(document_id), "limit": max_chunks}
+                ).fetchall()
+            else:
+                # No specific doc specified — get latest uploaded doc chunks
+                rows = db.execute(
+                    text("SELECT content FROM document_chunks WHERE content IS NOT NULL ORDER BY id DESC LIMIT :limit"),
+                    {"limit": max_chunks}
+                ).fetchall()
+
+            chunks = [row[0] for row in rows if row[0] and row[0].strip()]
+            if chunks:
+                print(f"[PRACTICE] PostgreSQL fallback retrieved {len(chunks)} chunks")
+            return "\n\n".join(chunks)
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[PRACTICE] PostgreSQL fallback failed: {e}")
+        return ""
+
+
 def generate_practice_problems(
     topic: Optional[str] = None,
     subject: Optional[str] = None,
@@ -181,6 +263,9 @@ def generate_practice_problems(
         filters["doc_id"] = {"$in": [str(d) for d in document_ids]}
     elif document_id:
         filters["doc_id"] = {"$eq": str(document_id)}
+
+    # --- Ensure BM25 index is populated (rebuild from PostgreSQL if empty after restart) ---
+    _ensure_bm25_loaded(document_id=document_id, document_ids=document_ids)
     
     # Multi-query retrieval for better coverage
     query_variations = expand_query(query, mode="auto", num_variations=2)
@@ -208,7 +293,16 @@ def generate_practice_problems(
     context_text = "\n\n".join([c for c in context if c]).strip()
     
     if not context_text:
-        # Return empty list if no context
+        # Fallback: pull chunks directly from PostgreSQL when Pinecone/BM25 returns nothing
+        print("[PRACTICE] Vector search returned no results — falling back to PostgreSQL full-text retrieval")
+        context_text = _fetch_context_from_db(
+            document_id=document_id,
+            document_ids=document_ids,
+            max_chunks=retrieve_count
+        )
+    
+    if not context_text:
+        # Still no context — truly nothing indexed
         return []
     
     # Generate problems based on type
