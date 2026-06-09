@@ -1029,7 +1029,8 @@
   .chat-controls-row > div {
     width: 100%;
   }
-  .chat-controls-row button {
+  .chat-mode-btn,
+  .chat-dropdown-trigger {
     width: 100%;
     justify-content: center;
   }
