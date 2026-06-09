@@ -141,16 +141,8 @@ export default function PracticeBox({ subject, documentIds }) {
 
       {/* Document selector */}
       {allDocs.length > 0 && (
-        <div style={{
-          marginBottom: "16px",
-          padding: "12px 16px",
-          backgroundColor: "rgba(79,70,229,0.08)",
-          borderRadius: "8px",
-          border: "1px solid rgba(79,70,229,0.2)",
-          fontSize: "13px",
-          color: "#c7d2fe"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+        <div className="practicebox-doc-selector">
+          <div className="practicebox-doc-header">
             <span style={{ fontWeight: "600" }}>📂 Documents to quiz from:</span>
             <button
               onClick={() =>
@@ -173,20 +165,12 @@ export default function PracticeBox({ subject, documentIds }) {
               {selectedIds.length === allDocs.length ? "✕ Deselect All" : "✓ Select All"}
             </button>
           </div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+          <div className="practicebox-doc-list">
             {allDocs.map(doc => {
               const checked = selectedIds.includes(doc.id);
               const name = (doc.subject && doc.subject !== "General") ? doc.subject : doc.filename;
               return (
-                <label key={doc.id} style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  padding: "4px 10px", borderRadius: "9999px", cursor: "pointer",
-                  fontSize: "12px", fontWeight: checked ? "600" : "400",
-                  backgroundColor: checked ? "rgba(79,70,229,0.25)" : "rgba(255,255,255,0.05)",
-                  border: checked ? "1px solid rgba(79,70,229,0.5)" : "1px solid rgba(255,255,255,0.1)",
-                  color: checked ? "#c7d2fe" : "#6b7280",
-                  transition: "all 0.15s"
-                }}>
+                <label key={doc.id} className={`practicebox-doc-label ${checked ? "active" : "inactive"}`}>
                   <input
                     type="checkbox"
                     checked={checked}
@@ -195,7 +179,7 @@ export default function PracticeBox({ subject, documentIds }) {
                     )}
                     style={{ accentColor: "#818cf8", cursor: "pointer" }}
                   />
-                  📄 {name}
+                  <span className="practicebox-doc-name">📄 {name}</span>
                 </label>
               );
             })}

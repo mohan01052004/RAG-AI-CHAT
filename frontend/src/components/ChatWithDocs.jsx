@@ -263,73 +263,11 @@ export default function ChatWithDocs({ onUploaded }) {
     return `${selectedDocIds.length} Documents Selected`;
   };
 
-  // ─── Styles ───────────────────────────────────────────────────────────────
-  const S = {
-    card: {
-      maxWidth: "56rem",
-      margin: "0 auto",
-      padding: "24px",
-      backgroundColor: "rgba(30, 27, 75, 0.25)",
-      backdropFilter: "blur(12px)",
-      borderRadius: "12px",
-      border: "1px solid rgba(255,255,255,0.1)",
-      boxShadow: "0 25px 50px -12px rgba(0,0,0,0.5)",
-      color: "#f3f4f6",
-    },
-    section: {
-      marginBottom: "24px",
-      padding: "16px",
-      borderRadius: "8px",
-      backgroundColor: "rgba(30,27,75,0.4)",
-      border: "1px solid rgba(255,255,255,0.05)",
-    },
-    sectionTitle: {
-      fontSize: "1.125rem",
-      fontWeight: "600",
-      marginBottom: "12px",
-      display: "flex",
-      alignItems: "center",
-      gap: "8px",
-    },
-    inputText: {
-      flex: 1,
-      padding: "8px 12px",
-      borderRadius: "6px",
-      backgroundColor: "rgba(0,0,0,0.3)",
-      border: "1px solid rgba(255,255,255,0.1)",
-      fontSize: "13px",
-      color: "#f3f4f6",
-      outline: "none",
-    },
-    btn: (disabled) => ({
-      padding: "8px 16px",
-      backgroundColor: disabled ? "#374151" : "#2563eb",
-      color: disabled ? "#9ca3af" : "#ffffff",
-      borderRadius: "6px",
-      fontWeight: "600",
-      fontSize: "14px",
-      cursor: disabled ? "not-allowed" : "pointer",
-      border: "none",
-      transition: "background-color 0.2s",
-    }),
-    modeBtn: (active) => ({
-      padding: "6px 12px",
-      borderRadius: "6px",
-      fontWeight: "500",
-      fontSize: "12px",
-      cursor: "pointer",
-      transition: "all 0.2s",
-      backgroundColor: active ? "rgba(59,130,246,0.2)" : "transparent",
-      color: active ? "#3b82f6" : "#9ca3af",
-      border: active ? "1px solid rgba(59,130,246,0.3)" : "1px solid transparent",
-    }),
-  };
-
   return (
-    <div className="chat-card" style={S.card}>
+    <div className="chat-card">
       {/* ── 1. Document Upload Section ─────────────────────────────────── */}
-      <div className="chat-section-card" style={S.section}>
-        <h2 style={S.sectionTitle}>
+      <div className="chat-section-card">
+        <h2 className="chat-section-title">
           <span>📂</span> Document Center
         </h2>
 
@@ -368,13 +306,13 @@ export default function ChatWithDocs({ onUploaded }) {
             placeholder="Document name (e.g. Aptitude Resource)"
             value={docName}
             onChange={(e) => setDocName(e.target.value)}
-            style={{ ...S.inputText, minWidth: "220px", maxWidth: "340px" }}
+            className="chat-input-text"
           />
 
           <button
             onClick={handleUpload}
             disabled={!file || uploadStatus === "uploading"}
-            style={S.btn(!file || uploadStatus === "uploading")}
+            className="chat-btn"
           >
             {uploadStatus === "uploading" ? "Uploading…" : "Upload File"}
           </button>
@@ -454,35 +392,18 @@ export default function ChatWithDocs({ onUploaded }) {
       </div>
 
       {/* ── Mode Toggle + Document Selector ────────────────────────────── */}
-      <div
-        className="chat-controls-row"
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "16px",
-          position: "relative",
-        }}
-      >
+      <div className="chat-controls-row">
         {/* Mode toggle */}
-        <div
-          style={{
-            display: "flex",
-            gap: "8px",
-            padding: "4px",
-            backgroundColor: "rgba(0,0,0,0.2)",
-            borderRadius: "8px",
-          }}
-        >
+        <div className="chat-mode-toggle-container">
           <button
             onClick={() => setIsGeneralMode(false)}
-            style={S.modeBtn(!isGeneralMode)}
+            className={`chat-mode-btn ${!isGeneralMode ? "active" : ""}`}
           >
             🔍 Document Search
           </button>
           <button
             onClick={() => setIsGeneralMode(true)}
-            style={S.modeBtn(isGeneralMode)}
+            className={`chat-mode-btn ${isGeneralMode ? "active" : ""}`}
           >
             🌐 General AI
           </button>
@@ -493,20 +414,7 @@ export default function ChatWithDocs({ onUploaded }) {
           <div ref={dropdownRef} style={{ position: "relative" }}>
             <button
               onClick={() => setIsDropdownOpen((o) => !o)}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                padding: "8px 16px",
-                backgroundColor: "rgba(79,70,229,0.15)",
-                color: "#c7d2fe",
-                border: "1px solid rgba(79,70,229,0.4)",
-                borderRadius: "6px",
-                fontSize: "13px",
-                fontWeight: "600",
-                cursor: "pointer",
-                transition: "all 0.2s",
-              }}
+              className="chat-dropdown-trigger"
             >
               📂 {dropdownLabel()}
               <span style={{ fontSize: "10px", marginLeft: "4px" }}>▼</span>
@@ -727,19 +635,7 @@ export default function ChatWithDocs({ onUploaded }) {
       </div>
 
       {/* ── Chat History ───────────────────────────────────────────────── */}
-      <div
-        className="chat-history-container"
-        style={{
-          marginBottom: "16px",
-          padding: "16px",
-          borderRadius: "8px",
-          backgroundColor: "rgba(0,0,0,0.15)",
-          border: "1px solid rgba(255,255,255,0.05)",
-          minHeight: "300px",
-          maxHeight: "500px",
-          overflowY: "auto",
-        }}
-      >
+      <div className="chat-history-container">
         {(isGeneralMode ? generalHistory : documentHistory).length === 0 ? (
           <div
             style={{
@@ -775,33 +671,13 @@ export default function ChatWithDocs({ onUploaded }) {
               return (
                 <div
                   key={index}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: isUser ? "flex-end" : "flex-start",
-                    marginBottom: "16px",
-                  }}
+                  className={`chat-message-row ${isUser ? "user" : "assistant"}`}
                 >
                   {/* General warning banner */}
                   {!isUser &&
                     msg.mode === "general" &&
                     !isGeneralMode && (
-                      <div
-                        style={{
-                          width: "100%",
-                          maxWidth: "42rem",
-                          backgroundColor: "rgba(245,158,11,0.1)",
-                          border: "1px solid rgba(245,158,11,0.3)",
-                          color: "#fde68a",
-                          fontSize: "12px",
-                          padding: "10px 12px",
-                          borderRadius: "8px",
-                          marginBottom: "6px",
-                          display: "flex",
-                          alignItems: "flex-start",
-                          gap: "8px",
-                        }}
-                      >
+                      <div className="chat-warning-banner">
                         <span>⚠️</span>
                         <span>
                           This question doesn't seem related to your uploaded
@@ -811,23 +687,7 @@ export default function ChatWithDocs({ onUploaded }) {
                     )}
 
                   {/* Message bubble */}
-                  <div
-                    style={{
-                      maxWidth: "42rem",
-                      padding: "14px 16px",
-                      borderRadius: "12px",
-                      fontSize: "14px",
-                      lineHeight: "1.65",
-                      backgroundColor: isUser
-                        ? "#3b82f6"
-                        : "rgba(255,255,255,0.05)",
-                      color: isUser ? "#ffffff" : "#e5e7eb",
-                      alignSelf: isUser ? "flex-end" : "flex-start",
-                      border: isUser
-                        ? "none"
-                        : "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
+                  <div className={`chat-message-bubble ${isUser ? "user" : "assistant"}`}>
                     <div style={{ whiteSpace: "pre-wrap" }}>
                       {getDisplayAnswer(msg)}
                     </div>
@@ -837,35 +697,10 @@ export default function ChatWithDocs({ onUploaded }) {
                       msg.mode === "document" &&
                       msg.sources &&
                       msg.sources.length > 0 && (
-                        <div
-                          style={{
-                            display: "flex",
-                            flexWrap: "wrap",
-                            gap: "6px",
-                            marginTop: "12px",
-                            paddingTop: "8px",
-                            borderTop:
-                              "1px solid rgba(255,255,255,0.05)",
-                          }}
-                        >
+                        <div className="chat-citations-list">
                           {msg.sources.map((src, sidx) => (
-                            <span
-                              key={sidx}
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                padding: "2px 8px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: "500",
-                                backgroundColor:
-                                  "rgba(59,130,246,0.15)",
-                                color: "#93c5fd",
-                                border:
-                                  "1px solid rgba(59,130,246,0.3)",
-                              }}
-                            >
-                              [{src.filename} · chunk {src.chunk_index}]
+                            <span key={sidx} className="chat-citation-tag">
+                              <span>[{src.filename} · chunk {src.chunk_index}]</span>
                             </span>
                           ))}
                         </div>
@@ -876,39 +711,12 @@ export default function ChatWithDocs({ onUploaded }) {
                       msg.mode === "document" &&
                       msg.sources &&
                       msg.sources.length > 0 && (
-                        <div style={{ marginTop: "10px" }}>
+                        <div className="chat-sources-details">
                           <details style={{ fontSize: "12px" }}>
-                            <summary
-                              style={{
-                                color: "#60a5fa",
-                                cursor: "pointer",
-                                fontWeight: "500",
-                                userSelect: "none",
-                              }}
-                            >
-                              View sources ({msg.sources.length})
-                            </summary>
-                            <div
-                              style={{
-                                marginTop: "8px",
-                                paddingLeft: "12px",
-                                borderLeft:
-                                  "2px solid rgba(59,130,246,0.5)",
-                              }}
-                            >
+                            <summary>View sources ({msg.sources.length})</summary>
+                            <div className="chat-sources-list">
                               {msg.sources.map((src, sidx) => (
-                                <div
-                                  key={sidx}
-                                  style={{
-                                    backgroundColor:
-                                      "rgba(255,255,255,0.03)",
-                                    padding: "8px 10px",
-                                    borderRadius: "6px",
-                                    border:
-                                      "1px solid rgba(255,255,255,0.04)",
-                                    marginBottom: "6px",
-                                  }}
-                                >
+                                <div key={sidx} className="chat-source-item">
                                   <div
                                     style={{
                                       fontWeight: "600",
@@ -966,11 +774,7 @@ export default function ChatWithDocs({ onUploaded }) {
       </div>
 
       {/* ── Chat Input ─────────────────────────────────────────────────── */}
-      <form
-        onSubmit={handleSendMessage}
-        className="chat-input-form"
-        style={{ display: "flex", gap: "8px" }}
-      >
+      <form onSubmit={handleSendMessage} className="chat-input-form">
         <input
           type="text"
           className="chat-input-field"
@@ -981,32 +785,11 @@ export default function ChatWithDocs({ onUploaded }) {
               ? "Ask any question…"
               : "Ask questions about uploaded documents…"
           }
-          style={{
-            flex: 1,
-            padding: "12px 16px",
-            borderRadius: "8px",
-            backgroundColor: "rgba(0,0,0,0.2)",
-            border: "1px solid rgba(255,255,255,0.1)",
-            fontSize: "14px",
-            color: "#f3f4f6",
-            outline: "none",
-          }}
         />
         <button
           type="submit"
           disabled={isLoading || !message.trim()}
-          style={{
-            padding: "12px 24px",
-            backgroundColor:
-              isLoading || !message.trim() ? "#374151" : "#2563eb",
-            color: isLoading || !message.trim() ? "#9ca3af" : "#ffffff",
-            borderRadius: "8px",
-            fontWeight: "600",
-            fontSize: "14px",
-            cursor: isLoading || !message.trim() ? "not-allowed" : "pointer",
-            border: "none",
-            transition: "background-color 0.2s",
-          }}
+          className="chat-input-submit"
         >
           Send
         </button>

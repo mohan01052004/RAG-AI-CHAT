@@ -374,6 +374,64 @@
   font-size: 15px;
 }
 
+.practicebox-doc-selector {
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background-color: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.2);
+  border-radius: 8px;
+  font-size: 13px;
+  color: #c7d2fe;
+}
+
+.practicebox-doc-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.practicebox-doc-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.practicebox-doc-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 9999px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.15s;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.practicebox-doc-label.active {
+  background-color: rgba(79, 70, 229, 0.25);
+  border: 1px solid rgba(79, 70, 229, 0.5);
+  color: #c7d2fe;
+}
+
+.practicebox-doc-label.inactive {
+  background-color: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #6b7280;
+}
+
+.practicebox-doc-name {
+  display: inline-block;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Mobile Responsive */
 @media (max-width: 768px) {
   .practicebox-container {
@@ -408,5 +466,9 @@
 
   .practicebox-nav-button {
     width: 100%;
+  }
+
+  .practicebox-doc-name {
+    max-width: 120px;
   }
 }
