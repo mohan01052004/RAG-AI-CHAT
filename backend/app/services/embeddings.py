@@ -6,8 +6,16 @@ Falls back to local SentenceTransformer for local development if HF API key is m
 import os
 import logging
 import requests
-from pinecone import Pinecone
 from dotenv import load_dotenv
+
+# Safely import Pinecone — don't crash at startup if not installed
+try:
+    from pinecone import Pinecone as _PineconeClient
+    _PINECONE_IMPORTABLE = True
+except ImportError:
+    _PineconeClient = None
+    _PINECONE_IMPORTABLE = False
+    logging.warning("[embeddings] pinecone package not installed — vector search unavailable")
 
 load_dotenv(override=True)
 
@@ -133,8 +141,13 @@ def get_pinecone_index():
             "PINECONE_INDEX_NAME (or PINECONE_INDEX) environment variable is not set. "
             "Please add it in your Render (or local .env) environment variables."
         )
+    if not _PINECONE_IMPORTABLE or _PineconeClient is None:
+        raise ImportError(
+            "pinecone package is not installed. "
+            "Add 'pinecone>=3.0.0' to requirements.txt and redeploy."
+        )
 
-    _pc = Pinecone(api_key=api_key)
+    _pc = _PineconeClient(api_key=api_key)
     _index = _pc.Index(index_name)
     return _index
 

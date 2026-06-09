@@ -1,4 +1,10 @@
-from pinecone import Pinecone
+try:
+    from pinecone import Pinecone
+    _PINECONE_AVAILABLE = True
+except ImportError:
+    Pinecone = None
+    _PINECONE_AVAILABLE = False
+
 from app.config import PINECONE_API_KEY, PINECONE_INDEX
 from app.services.embeddings import embedding_model
 from uuid import uuid4
@@ -10,6 +16,8 @@ _index = None
 def _get_pinecone():
     global _pc
     if _pc is None:
+        if not _PINECONE_AVAILABLE or Pinecone is None:
+            raise ImportError("pinecone package is not installed. Add 'pinecone>=3.0.0' to requirements.txt.")
         _pc = Pinecone(api_key=PINECONE_API_KEY)
     return _pc
 
