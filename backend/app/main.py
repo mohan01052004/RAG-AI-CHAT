@@ -8,7 +8,7 @@ if sys.platform == "win32":
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routes import upload, query, documents, practice, chat
+from app.routes import query, documents, practice, chat
 from app.database import engine
 from app.models import Base
 
@@ -50,7 +50,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(upload.router)
 app.include_router(query.router)
 app.include_router(documents.router)
 app.include_router(practice.router)

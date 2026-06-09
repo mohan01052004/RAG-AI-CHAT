@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database import get_db
 
-from app.services.retrieval import retrieve_relevant_chunks
+
 
 router = APIRouter()
 

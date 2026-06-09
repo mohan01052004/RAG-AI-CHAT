@@ -18,30 +18,11 @@ const API = axios.create({
   baseURL: getBaseURL()
 });
 
-export const uploadPDF = (formData) =>
-  API.post("/upload", formData);
-
 export const getDocuments = () =>
   API.get("/documents");
 
 export const getDocumentHierarchy = () =>
   API.get("/documents/hierarchy");
-
-export const askQuestion = (question, options = {}) =>
-  API.post("/ask", {
-    question,
-    subject: options.subject || null,
-    document_id: options.document_id || null,
-    document_ids: options.document_ids || null
-  });
-
-export const getMcqs = (question, options = {}) =>
-  API.post("/mcq", {
-    question,
-    subject: options.subject || null,
-    document_id: options.document_id || null,
-    document_ids: options.document_ids || null
-  });
 
 export const generatePractice = (options = {}) =>
   API.post("/practice/generate", {
