@@ -6,14 +6,93 @@ Featuring a beautiful **sleek dark-glassmorphism UI**, the system is highly resp
 
 ---
 
+## 🏗️ System Architecture
+
+The project leverages a multi-tiered fallback architecture to ensure extreme reliability even when external API endpoints experience DNS issues, outages, or rate limits.
+
+```mermaid
+graph TD
+    subgraph Frontend [React Application - Sleek Glassmorphism]
+        UI[ChatWithDocs UI / PracticeBox]
+        DocCenter[Document Sidebar & Upload]
+    end
+
+    subgraph Backend [FastAPI Application]
+        API_Doc[POST /api/documents/upload]
+        API_Chat[POST /api/chat/rag]
+        API_Practice[POST /practice/generate]
+        
+        subgraph Ingestion [Ingestion Pipeline]
+            PDF[PDF Text Extraction]
+            Chunk[Semantic Chunker]
+            Embed[Embedding Pipeline Cascade]
+            HF[Hugging Face API]
+            GeminiEmb[Gemini Embedding API]
+            LocalST[Local SentenceTransformer]
+            Zero[Zero Vector Fallback]
+        end
+
+        subgraph Search_Retrieval [Retrieval & Search]
+            Dense[Pinecone Vector Search]
+            Sparse[PostgreSQL Full-Text Search / BM25]
+            Rerank[Cross-Encoder Reranking]
+        end
+
+        subgraph Generation [LLM Generation Cascade]
+            Gemini[Google Gemini API]
+            Groq[Groq API Fallback]
+        end
+    end
+
+    subgraph Storage [Databases]
+        PG[(PostgreSQL DB)]
+        PC[(Pinecone Vector DB)]
+    end
+
+    %% Ingestion Connections
+    DocCenter -->|Upload PDF| API_Doc
+    API_Doc --> PDF
+    PDF --> Chunk
+    Chunk -->|Insert Chunks| PG
+    Chunk --> Embed
+    Embed --> HF
+    HF -->|Connection/DNS Failure| GeminiEmb
+    GeminiEmb -->|Auth/Quota Failure| LocalST
+    LocalST -->|Missing Module Failure| Zero
+    HF -->|384-dim Vectors| PC
+    GeminiEmb -->|384-dim Vectors| PC
+    
+    %% Retrieval Connections
+    UI -->|Ask Question| API_Chat
+    API_Chat --> Search_Retrieval
+    Search_Retrieval -->|Dense Query| PC
+    Search_Retrieval -->|Keyword Query Fallback| PG
+    Search_Retrieval --> Rerank
+    Rerank -->|Top Grounded Context| Generation
+    
+    %% LLM Generation Cascade
+    Generation --> Gemini
+    Gemini -->|Rate Limited / 429| Groq
+    Gemini -->|Grounded Answer| UI
+    Groq -->|Grounded Answer| UI
+
+    %% Practice/Quiz Connections
+    UI -->|Generate Quiz| API_Practice
+    API_Practice -->|Fetch Raw Chunks| PG
+    API_Practice --> Generation
+    Generation -->|JSON MCQs| UI
+```
+
+---
+
 ## 🚀 Key Features
 
-* **Advanced PDF Structuring & Semantic Chunking**: Respects paragraph boundaries and document layouts, preserving page numbers, tags, and structure during chunking.
-* **Hybrid Search (Dense + Sparse)**: Combines Pinecone dense vector embeddings (`all-MiniLM-L6-v2`) with rank-BM25 sparse keyword indexers.
-* **Cross-Encoder Reranking**: Re-orders retrieved document chunks using `ms-marco-MiniLM-L-6-v2` for precise context grounding before query submission.
-* **Smart LLM Grounding & Cascade Fallback**: Queries Google Gemini (`gemini-2.5-flash`) for general/document answers, falling back automatically to Groq (`llama-3.1-8b-instant`) and Hugging Face inference hubs.
+* **Grounded Hybrid Retrieval (Dense + Sparse)**: Combines Pinecone dense vector embeddings with rank-BM25 sparse keyword indexers. If Pinecone is empty or unreachable, the system automatically falls back to full-text search in PostgreSQL.
+* **Flexible Ingestion & Embeddings Cascade**: Resolves outbound DNS and network issues (common on Render free tier) by trying the Hugging Face Inference API first, cascading to the Google Gemini Embedding API (`text-embedding-004` truncated to exactly 384 dimensions to match Pinecone index configuration), falling back to local `sentence-transformers`, and finally gracefully degrading to zero-vector records.
+* **Cross-Encoder Reranking**: Re-orders retrieved document chunks using a `ms-marco-MiniLM-L-6-v2` cross-encoder for precise context grounding before query submission.
+* **Smart LLM Grounding & Cascade Fallback**: Queries Google Gemini (`gemini-2.5-flash`) for general/document answers, falling back automatically to Groq (`llama-3.1-8b-instant`) under rate-limits or quota exhaustion.
 * **Interactive Tooltip Citations**: Matches generated answer citations back to document cards. Hovering over citation pills shows source PDF filenames and page numbers.
-* **Self-Assessment Quizzes**: Generates conceptual, scenario, and statement-based MCQs from uploaded documents. Option choices and correct answers are dynamically randomized to prevent pattern bias.
+* **PostgreSQL-First Self-Assessment Quizzes**: Generates conceptual, scenario, and statement-based MCQs from uploaded documents. Option choices and correct answers are dynamically randomized to prevent pattern bias. The practice generator reads raw chunks directly from PostgreSQL to guarantee quiz generation even if embedding endpoints fail.
 * **Instant Backend Startup (Lazy-loading)**: SentenceTransformer embedding models are lazy-loaded on the first request, resulting in instantaneous server boots and uvicorn hot-reloads.
 
 ---
@@ -75,7 +154,7 @@ Featuring a beautiful **sleek dark-glassmorphism UI**, the system is highly resp
    GROQ_API_KEY=your_groq_api_key
    GROQ_MODEL=llama-3.1-8b-instant
 
-   # HuggingFace (Optional Fallback)
+   # HuggingFace (Optional)
    HUGGINGFACE_API_KEY=your_huggingface_key
    HUGGINGFACE_EMBEDDING_MODEL=all-MiniLM-L6-v2
    HUGGINGFACE_LLM_MODEL=TinyLlama/TinyLlama-1.1B-Chat-v1.0
@@ -134,14 +213,14 @@ RAG AI Chat/
 │   │   ├── models.py           # PostgreSQL DB Schema models (Documents/Chunks)
 │   │   ├── schemas.py          # Pydantic schemas (MCQs, Chat, Queries)
 │   │   ├── routes/
-│   │   │   ├── upload.py       # PDF ingest, structural parsing & chunking
-│   │   │   ├── query.py        # Chat queries and RAG execution
+│   │   │   ├── chat.py         # Chat routes (RAG and general chat)
+│   │   │   ├── query.py        # Chat queries processing
 │   │   │   ├── practice.py     # Practice problem generation triggers
-│   │   │   └── documents.py    # PostgreSQL metadata list/delete endpoints
+│   │   │   └── documents.py    # PDF ingest, listing, and deletion
 │   │   └── services/
 │   │       ├── advanced_pdf_parser.py   # Hierarchical PDF structure reader
 │   │       ├── chunker.py               # Context-aware text chunking
-│   │       ├── embeddings.py            # Lazy-loaded SentenceTransformer client
+│   │       ├── embeddings.py            # Embedding service (HF + Gemini Fallback + Local)
 │   │       ├── hybrid_search.py         # RRF fusion of Dense and BM25 search
 │   │       ├── pinecone_service.py      # Upsert and retrieval vector calls
 │   │       ├── practice_generator.py    # MCQ and practice generator pipelines
@@ -152,11 +231,9 @@ RAG AI Chat/
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── ChatWithDocs.jsx  # Main container (Tabs, Document Center sidebar)
-│   │   │   ├── chatbox.js        # Chat message entry component
-│   │   │   ├── answerbox.js      # Citation mapping & confidence rating UI
-│   │   │   ├── uploadbox.js      # Document category upload box
-│   │   │   └── practicebox.js    # Self-Assessment MCQ panel
+│   │   │   ├── ChatWithDocs.jsx  # Main container (Tabs, Document Center sidebar, Chat)
+│   │   │   ├── practicebox.js    # Self-Assessment MCQ panel
+│   │   │   └── practicebox.css   # MCQ styling
 │   │   ├── App.js                # Core layout entrypoint
 │   │   ├── App.css               # Main Glassmorphism design system
 │   │   └── index.js              # ReactDOM renderer
@@ -168,8 +245,8 @@ RAG AI Chat/
 
 ## 🔄 Main API Routing
 
-* **`POST /upload`**: Ingests document. Accepts multi-part Form: `file` (PDF) and `subject` (Category Tag). Semantic chunker parses text, uploads vectors to Pinecone, and writes records to PostgreSQL.
-* **`POST /query/ask`**: Grounded chat query. Accepts `question` (string), `subject` (optional filter), and `document_ids` (array of numeric filters). Returns JSON payload:
+* **`POST /api/documents/upload`**: Ingests document. Accepts multi-part Form: `file` (PDF) and `subject` (Category Tag). Semantic chunker parses text, uploads vectors to Pinecone, and writes records to PostgreSQL.
+* **`POST /api/chat/rag`**: Grounded chat query. Accepts `question` (string), `subject` (optional filter), and `document_ids` (array of numeric filters). Returns JSON payload:
   ```json
   {
     "answer": "Grounded answer text here...",
@@ -188,8 +265,8 @@ RAG AI Chat/
     }
   }
   ```
-* **`POST /practice/generate`**: Self-Assessment engine. Generates randomized conceptual, scenario, and calculation problems. Configures `difficulty` (`easy`, `medium`, `hard`) and `question_type` (`mcq`, `theory`, `numerical`).
-* **`GET /documents`**: Returns JSON list of all uploaded documents including IDs, subjects/categories, filenames, and uploads timestamps.
+* **`POST /practice/generate`**: Self-Assessment engine. Generates randomized conceptual, scenario, and statement-based problems. Configures `difficulty` (`easy`, `medium`, `hard`) and `question_type` (`mcq`, `theory`, `numerical`).
+* **`GET /documents`**: Returns JSON list of all uploaded documents including IDs, subjects/categories, filenames, and upload timestamps.
 * **`DELETE /documents/{id}`**: Purges metadata from PostgreSQL and vectors from Pinecone.
 
 ---
@@ -202,11 +279,11 @@ cd backend
 $env:PYTHONIOENCODING="utf-8"   # On Windows PowerShell
 python test_practice_debug.py
 ```
-This runs internal tests checking the active Groq fallback, local database connectivity, and Pydantic options normalizations.
+This runs internal tests checking the active Groq fallback, local database connectivity, and Pydantic options normalization.
+
+---
 
 ## 🧠 Architectural Decisions & Design Trade-offs
-
-During the design and implementation of RAG AI Chat, several architectural choices and product decisions were made to improve reliability, speed, and usability:
 
 ### 1. Lazy-Loading the SentenceTransformer Model
 * **Choice**: Switched `SentenceTransformer` initialization in `embeddings.py` from module load-time to a lazy-loading getter function `_get_model()`.
@@ -226,11 +303,9 @@ During the design and implementation of RAG AI Chat, several architectural choic
 * **Choice**: Shuffler helper inside `practice_generator.py` and `rag_pipeline.py` that shuffles the options list (A, B, C, D) and remaps the correct option pointer at runtime.
 * **Reasoning**: Example templates inside prompts bias the LLM to output a specific choice (e.g. choice "B") as the correct answer. Dynamic shuffling at the backend guarantees a mathematically uniform probability distribution of correct options and eliminates prediction bias.
 
-### 5. Local Cache Fallbacks for Hybrid Retrieval
-* **Choice**: Implemented a graceful metadata extraction fallback inside hybrid search where the system queries Pinecone with metadata retrieval enabled if the in-memory BM25 index cache is cleared (e.g. after server restarts).
-* **Reasoning**: In-memory caching is highly performant but transient. Ensuring vector database queries can stand alone ensures document sources and filenames never default to "Unknown Document".
+### 5. PostgreSQL-First Ingestion & Quiz Fallback
+* **Choice**: Quiz generators read directly from PostgreSQL chunks first rather than querying the vector database.
+* **Reasoning**: Connecting to embedding inference APIs during quiz generation can delay quiz retrieval or fail if endpoints hit rate limits. Database-first retrieval is highly fast, completely reliable, and always works regardless of vector indexing status.
 
-
-
-**Version**: 1.0.0  
+**Version**: 1.1.0  
 **License**: MIT
