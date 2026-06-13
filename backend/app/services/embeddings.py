@@ -88,32 +88,72 @@ def _embed_via_local(texts: list) -> list:
     return [e.tolist() for e in embeddings]
 
 
+def _embed_via_gemini(texts: list) -> list:
+    """Use Gemini's embedding API to generate embeddings with exactly 384 dimensions to match Pinecone index."""
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        raise ValueError("GEMINI_API_KEY is not set")
+    
+    # Try the new Google GenAI SDK first
+    try:
+        from google import genai
+        from google.genai import types
+        client = genai.Client(api_key=api_key)
+        response = client.models.embed_content(
+            model="text-embedding-004",
+            contents=texts,
+            config=types.EmbedContentConfig(output_dimensionality=384)
+        )
+        return [emb.values for emb in response.embeddings]
+    except Exception as e:
+        # Fall back to legacy google.generativeai SDK if modern one isn't configured/supported
+        import google.generativeai as genai
+        genai.configure(api_key=api_key)
+        response = genai.embed_content(
+            model="models/text-embedding-004",
+            content=texts,
+            task_type="retrieval_document",
+            output_dimensionality=384
+        )
+        raw_embs = response.get("embedding", [])
+        if isinstance(raw_embs, list) and len(raw_embs) > 0:
+            if isinstance(raw_embs[0], float):
+                return [raw_embs]
+            return raw_embs
+        raise ValueError(f"Unexpected response format from Gemini embedding API: {e}")
+
+
 def _embed(texts: list) -> list:
     """
     Embed a list of texts.
-    Uses HuggingFace Inference API if key is available (production),
-    otherwise falls back to local model (development).
+    Uses HuggingFace Inference API if key is available (production).
+    Falls back to Gemini embedding API if Hugging Face fails (robust fallback on Render).
+    Falls back to local SentenceTransformer for local development if APIs fail.
     """
     if isinstance(texts, str):
         texts = [texts]
 
+    # Try Hugging Face first (if key is set)
     if _HF_API_KEY:
         try:
             return _embed_via_hf_api(texts)
         except Exception as e:
-            logging.warning(f"HF API embedding failed ({e}), trying local fallback...")
-            try:
-                return _embed_via_local(texts)
-            except Exception as local_e:
-                logging.error(f"Local fallback also failed (e.g. missing sentence-transformers): {local_e}")
-                # Return zero vector representation to prevent crash
-                return [[0.0] * 384 for _ in texts]
-    else:
+            logging.warning(f"HF API embedding failed ({e}), trying Gemini fallback...")
+    
+    # Try Gemini next (if key is set)
+    if os.getenv("GEMINI_API_KEY"):
         try:
-            return _embed_via_local(texts)
-        except Exception as local_e:
-            logging.error(f"Local fallback failed: {local_e}")
-            return [[0.0] * 384 for _ in texts]
+            return _embed_via_gemini(texts)
+        except Exception as gemini_e:
+            logging.warning(f"Gemini API embedding failed ({gemini_e}), trying local fallback...")
+
+    # Finally try local model fallback
+    try:
+        return _embed_via_local(texts)
+    except Exception as local_e:
+        logging.error(f"Local fallback also failed (e.g. missing sentence-transformers): {local_e}")
+        # Return zero vector representation to prevent crash
+        return [[0.0] * 384 for _ in texts]
 
 
 # ─── Pinecone setup (lazy init so missing env vars don't crash at startup) ────
