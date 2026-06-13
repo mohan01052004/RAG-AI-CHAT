@@ -11,76 +11,74 @@ Featuring a beautiful **sleek dark-glassmorphism UI**, the system is highly resp
 The project leverages a multi-tiered fallback architecture to ensure extreme reliability even when external API endpoints experience DNS issues, outages, or rate limits.
 
 ```mermaid
-graph TD
-    subgraph Frontend [React Application - Sleek Glassmorphism]
-        UI[ChatWithDocs UI / PracticeBox]
-        DocCenter[Document Sidebar & Upload]
-    end
-
-    subgraph Backend [FastAPI Application]
-        API_Doc[POST /api/documents/upload]
-        API_Chat[POST /api/chat/rag]
-        API_Practice[POST /practice/generate]
+flowchart TD
+    %% 1. High-level System Overview
+    subgraph HighLevel ["System Interaction Overview"]
+        direction TB
         
-        subgraph Ingestion [Ingestion Pipeline]
-            PDF[PDF Text Extraction]
-            Chunk[Semantic Chunker]
-            Embed[Embedding Pipeline Cascade]
-            HF[Hugging Face API]
-            GeminiEmb[Gemini Embedding API]
-            LocalST[Local SentenceTransformer]
-            Zero[Zero Vector Fallback]
+        FE["React.js Frontend<br>(Vercel)"] <-->|"HTTPS REST API<br>(Answer + Sources JSON)"| BE["FastAPI Backend<br>(Render)"]
+        BE <-->|"Gemini / Groq API<br>(Generated Answer)"| LLM["Google Gemini 1.5 Flash<br>& Groq Cascade"]
+        BE -->|"SQL Queries"| DB["PostgreSQL Database<br>(Chunks & Metadata)"]
+        BE -->|"Vector Operations"| VS["Pinecone Database<br>(Vector Store)"]
+    end
+
+    %% 2. Flows Section
+    subgraph Flows ["Process Flows"]
+        direction TB
+        
+        subgraph IngestionFlow ["PDF Ingestion Flow"]
+            direction LR
+            I1["User Uploads PDF"] --> I2["FastAPI Backend"] --> I3["PDF Parser & Chunker"] --> I4["Generate Embeddings<br>(HF / Gemini Fallback)"] --> I5["Store in Databases<br>(PostgreSQL & Pinecone)"]
         end
 
-        subgraph Search_Retrieval [Retrieval & Search]
-            Dense[Pinecone Vector Search]
-            Sparse[PostgreSQL Full-Text Search / BM25]
-            Rerank[Cross-Encoder Reranking]
-        end
-
-        subgraph Generation [LLM Generation Cascade]
-            Gemini[Google Gemini API]
-            Groq[Groq API Fallback]
+        subgraph QA_Flow ["Question Answering (RAG) Flow"]
+            direction LR
+            Q1["User Question<br>(From Frontend)"] --> Q2["FastAPI Backend"] --> Q3["Retrieve Chunks<br>(Pinecone / PG Fallback)"] --> Q4["Cross-Encoder Rerank"] --> Q5["Send Grounded Context to LLM"] --> Q6["Generated Answer"] --> Q7["Frontend Displays<br>Answer + Citations"]
         end
     end
 
-    subgraph Storage [Databases]
-        PG[(PostgreSQL DB)]
-        PC[(Pinecone Vector DB)]
+    %% 3. Components Box
+    subgraph Components ["Components"]
+        direction TB
+        C1["Frontend : React.js (Deployed on Vercel)"]
+        C2["Backend : FastAPI (Deployed on Render)"]
+        C3["Database : PostgreSQL (Stores Document Chunks & Metadata)"]
+        C4["Vector Store : Pinecone (Stores Document Embeddings)"]
+        C5["LLM : Google Gemini 1.5 Flash (Primary) / Groq Llama-3.1-8b-instant (Fallback)"]
     end
 
-    %% Ingestion Connections
-    DocCenter -->|Upload PDF| API_Doc
-    API_Doc --> PDF
-    PDF --> Chunk
-    Chunk -->|Insert Chunks| PG
-    Chunk --> Embed
-    Embed --> HF
-    HF -->|Connection/DNS Failure| GeminiEmb
-    GeminiEmb -->|Auth/Quota Failure| LocalST
-    LocalST -->|Missing Module Failure| Zero
-    HF -->|384-dim Vectors| PC
-    GeminiEmb -->|384-dim Vectors| PC
+    %% Apply Black and White minimal styles to look like the sample image
+    style HighLevel fill:#fafafa,stroke:#333,stroke-width:1px
+    style Flows fill:#fafafa,stroke:#333,stroke-width:1px
+    style IngestionFlow fill:#ffffff,stroke:#333,stroke-width:1px
+    style QA_Flow fill:#ffffff,stroke:#333,stroke-width:1px
+    style Components fill:#ffffff,stroke:#333,stroke-width:1px
     
-    %% Retrieval Connections
-    UI -->|Ask Question| API_Chat
-    API_Chat --> Search_Retrieval
-    Search_Retrieval -->|Dense Query| PC
-    Search_Retrieval -->|Keyword Query Fallback| PG
-    Search_Retrieval --> Rerank
-    Rerank -->|Top Grounded Context| Generation
-    
-    %% LLM Generation Cascade
-    Generation --> Gemini
-    Gemini -->|Rate Limited / 429| Groq
-    Gemini -->|Grounded Answer| UI
-    Groq -->|Grounded Answer| UI
+    style FE fill:#ffffff,stroke:#333,stroke-width:1.5px
+    style BE fill:#ffffff,stroke:#333,stroke-width:1.5px
+    style LLM fill:#ffffff,stroke:#333,stroke-width:1.5px
+    style DB fill:#ffffff,stroke:#333,stroke-width:1.5px
+    style VS fill:#ffffff,stroke:#333,stroke-width:1.5px
 
-    %% Practice/Quiz Connections
-    UI -->|Generate Quiz| API_Practice
-    API_Practice -->|Fetch Raw Chunks| PG
-    API_Practice --> Generation
-    Generation -->|JSON MCQs| UI
+    style I1 fill:#ffffff,stroke:#333,stroke-width:1px
+    style I2 fill:#ffffff,stroke:#333,stroke-width:1px
+    style I3 fill:#ffffff,stroke:#333,stroke-width:1px
+    style I4 fill:#ffffff,stroke:#333,stroke-width:1px
+    style I5 fill:#ffffff,stroke:#333,stroke-width:1px
+
+    style Q1 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q2 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q3 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q4 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q5 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q6 fill:#ffffff,stroke:#333,stroke-width:1px
+    style Q7 fill:#ffffff,stroke:#333,stroke-width:1px
+    
+    style C1 fill:#ffffff,stroke:none
+    style C2 fill:#ffffff,stroke:none
+    style C3 fill:#ffffff,stroke:none
+    style C4 fill:#ffffff,stroke:none
+    style C5 fill:#ffffff,stroke:none
 ```
 
 ---
